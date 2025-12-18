@@ -1,0 +1,4 @@
+// Middleware files will be added here
+// - auth.middleware.js
+// - errorHandler.middleware.js
+// - validation.middleware.js

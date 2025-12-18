@@ -1,0 +1,8 @@
+// Route files will be added here
+// - auth.routes.js
+// - venue.routes.js
+// - court.routes.js
+// - booking.routes.js
+// - sport.routes.js
+// - review.routes.js
+// - event.routes.js

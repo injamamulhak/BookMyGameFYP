@@ -1,0 +1,4 @@
+// Validation schemas will be added here
+// - auth.validator.js
+// - venue.validator.js
+// - booking.validator.js

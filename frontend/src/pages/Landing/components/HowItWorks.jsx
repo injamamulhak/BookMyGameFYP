@@ -1,0 +1,86 @@
+const steps = [
+    {
+        id: 1,
+        icon: '🔍',
+        title: 'Search Venues',
+        description: 'Browse through hundreds of sports venues in your area. Filter by sport, location, and availability.',
+    },
+    {
+        id: 2,
+        icon: '📅',
+        title: 'Book Your Slot',
+        description: 'Choose your preferred time slot and court. Get instant confirmation with flexible hourly bookings.',
+    },
+    {
+        id: 3,
+        icon: '💳',
+        title: 'Secure Payment',
+        description: 'Pay securely with Khalti. Get instant receipts and booking confirmations via email.',
+    },
+    {
+        id: 4,
+        icon: '🎮',
+        title: 'Play & Enjoy',
+        description: 'Show up and play! Rate your experience and help others find great venues.',
+    },
+];
+
+function HowItWorks() {
+    return (
+        <section className="py-16 md:py-24 bg-white">
+            <div className="container-custom">
+                {/* Section Header */}
+                <div className="text-center mb-16">
+                    <h2 className="font-heading font-bold text-3xl md:text-4xl text-gray-900 mb-4">
+                        How It Works
+                    </h2>
+                    <p className="text-gray-600 text-lg max-w-2xl mx-auto">
+                        Booking your favorite sports venue is easy! Follow these simple steps
+                    </p>
+                </div>
+
+                {/* Steps Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    {steps.map((step, index) => (
+                        <div key={step.id} className="relative">
+                            {/* Connector Line (hidden on mobile and last item) */}
+                            {index < steps.length - 1 && (
+                                <div className="hidden lg:block absolute top-12 left-1/2 w-full h-0.5 bg-gradient-to-r from-primary-200 to-transparent" />
+                            )}
+
+                            <div className="relative text-center">
+                                {/* Icon Circle */}
+                                <div className="relative inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 text-white mb-6 shadow-lg mx-auto">
+                                    <span className="text-4xl">{step.icon}</span>
+                                    <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white text-primary-600 font-bold text-sm flex items-center justify-center shadow-md">
+                                        {step.id}
+                                    </div>
+                                </div>
+
+                                {/* Content */}
+                                <h3 className="font-heading font-bold text-xl text-gray-900 mb-3">
+                                    {step.title}
+                                </h3>
+                                <p className="text-gray-600">
+                                    {step.description}
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* CTA Button */}
+                <div className="text-center mt-12">
+                    <a href="/signup" className="btn-primary inline-flex items-center">
+                        <span>Get Started Now</span>
+                        <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+export default HowItWorks;
