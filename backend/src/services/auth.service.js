@@ -276,6 +276,36 @@ class AuthService {
     }
 
     /**
+     * Update user profile
+     */
+    async updateProfile(userId, profileData) {
+        const { fullName, phone, profileImage } = profileData;
+
+        // Build update data - only include fields that are provided
+        const updateData = {};
+        if (fullName !== undefined) updateData.fullName = fullName;
+        if (phone !== undefined) updateData.phone = phone;
+        if (profileImage !== undefined) updateData.profileImage = profileImage;
+
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: updateData,
+            select: {
+                id: true,
+                email: true,
+                fullName: true,
+                phone: true,
+                role: true,
+                profileImage: true,
+                isVerified: true,
+                createdAt: true,
+            },
+        });
+
+        return updatedUser;
+    }
+
+    /**
      * Request password reset
      * Silent response - doesn't reveal if email exists (security best practice)
      */

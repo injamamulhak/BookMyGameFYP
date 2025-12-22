@@ -37,6 +37,21 @@ router.get('/me', auth, authController.getCurrentUser);
 router.put('/password', auth, authController.updatePassword);
 
 /**
+ * @route   PUT /api/auth/profile
+ * @desc    Update user profile
+ * @access  Private
+ */
+router.put('/profile', auth, authController.updateProfile);
+
+/**
+ * @route   POST /api/auth/profile/image
+ * @desc    Upload profile image
+ * @access  Private
+ */
+const { upload } = require('../middleware/upload');
+router.post('/profile/image', auth, upload.single('profileImage'), authController.uploadProfileImage);
+
+/**
  * @route   GET /api/auth/verify-email/:token
  * @desc    Verify user email with token
  * @access  Public

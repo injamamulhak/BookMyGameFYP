@@ -185,6 +185,95 @@ const updatePassword = async (req, res) => {
 };
 
 /**
+ * PUT /api/auth/profile
+ * Update user profile
+ */
+const updateProfile = async (req, res) => {
+    try {
+        const { fullName, phone, profileImage } = req.body;
+        const userId = req.user.id;
+
+        // Validation
+        if (!fullName || fullName.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Full name is required',
+            });
+        }
+
+        const updatedUser = await authService.updateProfile(userId, {
+            fullName: fullName.trim(),
+            phone: phone?.trim() || null,
+            profileImage: profileImage || null,
+        });
+
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            data: updatedUser,
+        });
+    } catch (error) {
+        console.error('Update profile error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update profile',
+        });
+    }
+};
+
+/**
+ * POST /api/auth/profile/image
+ * Upload profile image to Cloudinary (returns URL, does NOT save to profile)
+ * The URL should be sent back via PUT /api/auth/profile to save
+ */
+const uploadProfileImage = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No image file provided',
+            });
+        }
+
+        // Get image URL from uploaded file
+        const { getImageUrl } = require('../middleware/upload');
+        const imageUrl = getImageUrl(req.file);
+
+        if (!imageUrl) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to process uploaded image',
+            });
+        }
+
+        // Just return the URL - don't save to database yet
+        // The frontend will include this URL when saving the full profile
+        res.json({
+            success: true,
+            message: 'Image uploaded successfully',
+            data: {
+                profileImage: imageUrl,
+            },
+        });
+    } catch (error) {
+        console.error('Upload profile image error:', error);
+
+        // Check for timeout errors from Cloudinary
+        if (error.name === 'TimeoutError' || error.message?.includes('Timeout') || error.http_code === 499) {
+            return res.status(408).json({
+                success: false,
+                message: 'Image upload timed out. Please try a smaller image or check your internet connection.',
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to upload profile image. Please try again.',
+        });
+    }
+};
+
+/**
  * GET /api/auth/verify-email/:token
  * Verify user email with token
  */
@@ -375,6 +464,8 @@ module.exports = {
     login,
     getCurrentUser,
     updatePassword,
+    updateProfile,
+    uploadProfileImage,
     verifyEmail,
     resendVerification,
     forgotPassword,
