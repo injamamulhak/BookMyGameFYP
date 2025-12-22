@@ -80,10 +80,10 @@ function OperatorSettings() {
             formData.append('profileImage', file);
 
             // Upload image to get URL, but don't save to profile yet
-            // Use longer timeout for image uploads (60 seconds)
+            // Use longer timeout for image uploads (120 seconds)
             const response = await api.post('/auth/profile/image', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
-                timeout: 60000, // 60 seconds for image uploads
+                timeout: 120000, // 120 seconds for image uploads
             });
 
             if (response.data.success) {
@@ -97,7 +97,12 @@ function OperatorSettings() {
             }
         } catch (err) {
             console.error('Error uploading image:', err);
-            showMessage('error', err.response?.data?.message || 'Failed to upload image');
+            // Better error message for timeouts
+            if (err.code === 'ECONNABORTED') {
+                showMessage('error', 'Upload timed out. Please try a smaller image or check your internet connection.');
+            } else {
+                showMessage('error', err.response?.data?.message || 'Failed to upload image');
+            }
         } finally {
             setIsUploadingImage(false);
             // Reset file input
