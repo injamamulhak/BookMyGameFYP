@@ -257,6 +257,7 @@ const uploadProfileImage = async (req, res) => {
         });
     } catch (error) {
         console.error('Upload profile image error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
 
         // Check for timeout errors from Cloudinary
         if (error.name === 'TimeoutError' || error.message?.includes('Timeout') || error.http_code === 499) {
@@ -266,9 +267,17 @@ const uploadProfileImage = async (req, res) => {
             });
         }
 
+        // Check for Cloudinary specific errors
+        if (error.http_code) {
+            return res.status(error.http_code === 400 ? 400 : 500).json({
+                success: false,
+                message: `Cloudinary error: ${error.message || 'Upload failed'}`,
+            });
+        }
+
         res.status(500).json({
             success: false,
-            message: 'Failed to upload profile image. Please try again.',
+            message: error.message || 'Failed to upload profile image. Please try again.',
         });
     }
 };
