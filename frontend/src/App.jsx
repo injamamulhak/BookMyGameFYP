@@ -16,6 +16,18 @@ import OperatorDashboard from './pages/Operator/OperatorDashboard';
 import VenueListings from './pages/Operator/VenueListings';
 import AddEditVenue from './pages/Operator/AddEditVenue';
 import VenueDetails from './pages/Operator/VenueDetails';
+import ManageBookings from './pages/Operator/ManageBookings';
+import BookingDetail from './pages/Operator/BookingDetail';
+import BookingCalendar from './pages/Operator/BookingCalendar';
+import OperatorSettings from './pages/Operator/OperatorSettings';
+
+// Admin imports
+import AdminLayout from './components/layout/AdminLayout';
+import AdminDashboard from './pages/Admin/AdminDashboard';
+import PendingVenues from './pages/Admin/PendingVenues';
+import AllVenues from './pages/Admin/AllVenues';
+import VenueApproval from './pages/Admin/VenueApproval';
+import UserManagement from './pages/Admin/UserManagement';
 
 function App() {
     return (
@@ -47,16 +59,27 @@ function App() {
                             <Route path="venues/new" element={<AddEditVenue />} />
                             <Route path="venues/:id" element={<VenueDetails />} />
                             <Route path="venues/:id/edit" element={<AddEditVenue />} />
-                            {/* <Route path="bookings" element={<ManageBookings />} /> */}
-                            {/* <Route path="calendar" element={<BookingCalendar />} /> */}
-                            {/* <Route path="settings" element={<OperatorSettings />} /> */}
+                            <Route path="bookings" element={<ManageBookings />} />
+                            <Route path="bookings/:id" element={<BookingDetail />} />
+                            <Route path="calendar" element={<BookingCalendar />} />
+                            <Route path="settings" element={<OperatorSettings />} />
                         </Route>
 
-                        {/* Additional routes will be added here */}
-                        {/* <Route path="/venues/:id" element={<VenueDetailsPage />} /> */}
-                        {/* <Route path="/events/:id" element={<EventDetailsPage />} /> */}
-                        {/* <Route path="/dashboard" element={<DashboardPage />} /> */}
-                        {/* <Route path="/booking/:courtId" element={<BookingPage />} /> */}
+                        {/* Admin Routes */}
+                        <Route
+                            path="/admin"
+                            element={
+                                <ProtectedRoute requiredRoles={['admin']}>
+                                    <AdminLayout />
+                                </ProtectedRoute>
+                            }
+                        >
+                            <Route index element={<AdminDashboard />} />
+                            <Route path="venues/pending" element={<PendingVenues />} />
+                            <Route path="venues/:id" element={<VenueApproval />} />
+                            <Route path="venues" element={<AllVenues />} />
+                            <Route path="users" element={<UserManagement />} />
+                        </Route>
                     </Routes>
                 </div>
             </Router>
@@ -65,4 +88,5 @@ function App() {
 }
 
 export default App;
+
 
