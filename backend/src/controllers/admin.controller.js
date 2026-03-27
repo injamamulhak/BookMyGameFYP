@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { getIo } = require('../socket');
 
 /**
  * Admin Controller
@@ -254,7 +255,23 @@ const approveVenue = async (req, res) => {
             },
         });
 
-        // TODO: Send notification to operator about approval
+        const notification = await prisma.notification.create({
+            data: {
+                userId: venue.operatorId,
+                type: 'venue_approved',
+                title: 'Venue Approved',
+                message: `Your venue "${venue.name}" has been approved and is now live!`,
+                relatedEntityType: 'venue',
+                relatedEntityId: venue.id
+            }
+        });
+
+        // Emit real-time notification
+        try {
+            getIo().to(venue.operatorId).emit('new_notification', notification);
+        } catch (socketErr) {
+            console.error('Socket error emitting venue_approved:', socketErr);
+        }
 
         res.json({
             success: true,
@@ -310,7 +327,22 @@ const rejectVenue = async (req, res) => {
             },
         });
 
-        // TODO: Send notification to operator about rejection
+        const notification = await prisma.notification.create({
+            data: {
+                userId: venue.operatorId,
+                type: 'venue_rejected',
+                title: 'Venue Rejected',
+                message: `Your venue "${venue.name}" was rejected. Reason: ${reason}`,
+                relatedEntityType: 'venue',
+                relatedEntityId: venue.id
+            }
+        });
+
+        try {
+            getIo().to(venue.operatorId).emit('new_notification', notification);
+        } catch (socketErr) {
+            console.error('Socket error emitting venue_rejected:', socketErr);
+        }
 
         res.json({
             success: true,
@@ -359,6 +391,8 @@ const getAllUsers = async (req, res) => {
                     phone: true,
                     role: true,
                     isVerified: true,
+                    canSellProducts: true,
+                    sellerRequestStatus: true,
                     createdAt: true,
                     _count: { select: { ownedVenues: true, bookings: true } },
                 },
@@ -501,6 +535,143 @@ const deleteUser = async (req, res) => {
     }
 };
 
+// ============================================
+// SELLER REQUEST MANAGEMENT
+// ============================================
+
+/**
+ * Get pending seller requests
+ * GET /api/admin/seller-requests
+ */
+const getSellerRequests = async (req, res) => {
+    try {
+        const requests = await prisma.user.findMany({
+            where: {
+                role: 'operator',
+                sellerRequestStatus: 'pending',
+            },
+            select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phone: true,
+                createdAt: true,
+                _count: { select: { ownedVenues: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        res.json({
+            success: true,
+            data: requests,
+        });
+    } catch (error) {
+        console.error('Error fetching seller requests:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch seller requests',
+        });
+    }
+};
+
+/**
+ * Approve seller request
+ * PUT /api/admin/seller-requests/:id/approve
+ */
+const approveSellerRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const user = await prisma.user.findUnique({ where: { id } });
+        if (!user || user.role !== 'operator') {
+            return res.status(404).json({
+                success: false,
+                message: 'Operator not found',
+            });
+        }
+
+        await prisma.user.update({
+            where: { id },
+            data: {
+                canSellProducts: true,
+                sellerRequestStatus: 'approved',
+            },
+        });
+
+        const notification = await prisma.notification.create({
+            data: {
+                userId: id,
+                type: 'seller_approved',
+                title: 'Seller Request Approved',
+                message: 'You are now approved to sell products on BookMyGame!',
+            }
+        });
+
+        try {
+            getIo().to(id).emit('new_notification', notification);
+        } catch (socketErr) {
+            console.error('Socket error emitting seller_approved:', socketErr);
+        }
+
+        res.json({
+            success: true,
+            message: `${user.fullName} has been approved as a seller`,
+        });
+    } catch (error) {
+        console.error('Error approving seller request:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to approve seller request',
+        });
+    }
+};
+
+/**
+ * Reject seller request
+ * PUT /api/admin/seller-requests/:id/reject
+ */
+const rejectSellerRequest = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const user = await prisma.user.findUnique({ where: { id } });
+        if (!user || user.role !== 'operator') {
+            return res.status(404).json({
+                success: false,
+                message: 'Operator not found',
+            });
+        }
+
+        await prisma.user.update({
+            where: { id },
+            data: {
+                canSellProducts: false,
+                sellerRequestStatus: 'rejected',
+            },
+        });
+
+        await prisma.notification.create({
+            data: {
+                userId: id,
+                type: 'seller_rejected',
+                title: 'Seller Request Rejected',
+                message: 'Your request to sell products has been rejected.',
+            }
+        });
+
+        res.json({
+            success: true,
+            message: `Seller request from ${user.fullName} has been rejected`,
+        });
+    } catch (error) {
+        console.error('Error rejecting seller request:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reject seller request',
+        });
+    }
+};
+
 module.exports = {
     getAdminDashboard,
     getPendingVenues,
@@ -511,5 +682,7 @@ module.exports = {
     getAllUsers,
     updateUser,
     deleteUser,
+    getSellerRequests,
+    approveSellerRequest,
+    rejectSellerRequest,
 };
-

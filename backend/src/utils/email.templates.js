@@ -108,26 +108,29 @@ const getBaseTemplate = (content) => `
 /**
  * Email Verification Template
  */
-const getVerificationEmailTemplate = (userName, verificationLink, expiryHours = 24) => {
+const getVerificationEmailTemplate = (userName, otp, verificationLink, expiryHours = 24) => {
     const content = `
         <div class="content">
             <h2>Welcome to BookMyGame! 👋</h2>
             <p>Hi <strong>${userName}</strong>,</p>
             <p>Thank you for signing up! We're excited to have you join our community of sports enthusiasts.</p>
-            <p>To complete your registration and start booking amazing sports venues, please verify your email address by clicking the button below:</p>
+            <p>To complete your registration and start booking amazing sports venues, please use the OTP below:</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <div style="display: inline-block; padding: 15px 30px; background-color: #f8f9fa; border: 2px dashed #667eea; border-radius: 8px; font-size: 28px; font-weight: bold; letter-spacing: 5px; color: #333333;">
+                    ${otp}
+                </div>
+            </div>
+            
+            <p style="text-align: center;">Or verify your email address by clicking the button below:</p>
             
             <div style="text-align: center;">
                 <a href="${verificationLink}" class="button">Verify Email Address</a>
             </div>
             
             <div class="highlight">
-                <p style="margin: 0;"><strong>⏰ Important:</strong> This verification link will expire in <strong>${expiryHours} hours</strong>.</p>
+                <p style="margin: 0;"><strong>⏰ Important:</strong> This verification code will expire in <strong>${expiryHours} hours</strong>.</p>
             </div>
-            
-            <p>If the button doesn't work, you can also copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #667eea; font-size: 14px;">
-                ${verificationLink}
-            </p>
             
             <div class="divider"></div>
             

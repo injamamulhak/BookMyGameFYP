@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/roleCheck');
 
 /**
@@ -50,5 +50,18 @@ router.put('/users/:id', adminController.updateUser);
 
 // DELETE /api/admin/users/:id - Delete user
 router.delete('/users/:id', adminController.deleteUser);
+
+// ============================================
+// SELLER REQUEST MANAGEMENT
+// ============================================
+
+// GET /api/admin/seller-requests - Get pending seller requests
+router.get('/seller-requests', adminController.getSellerRequests);
+
+// PUT /api/admin/seller-requests/:id/approve - Approve seller request
+router.put('/seller-requests/:id/approve', adminController.approveSellerRequest);
+
+// PUT /api/admin/seller-requests/:id/reject - Reject seller request
+router.put('/seller-requests/:id/reject', adminController.rejectSellerRequest);
 
 module.exports = router;

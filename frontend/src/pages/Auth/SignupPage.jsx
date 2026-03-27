@@ -44,6 +44,10 @@ const SignupPage = () => {
             setError('Password must be at least 6 characters');
             return false;
         }
+        if (formData.phone && !/^(?:\+?977[- ]?)?[9][7-8]\d{8}$/.test(formData.phone)) {
+            setError('Please enter a valid 10-digit Nepali phone number (e.g., 9841234567)');
+            return false;
+        }
         return true;
     };
 
@@ -60,9 +64,9 @@ const SignupPage = () => {
             const response = await signup(formData);
             if (response.success) {
                 setSuccess(response.message);
-                // Redirect to home after short delay
+                // Redirect to verify-email after short delay
                 setTimeout(() => {
-                    navigate('/');
+                    navigate('/verify-email');
                 }, 2000);
             }
         } catch (err) {
@@ -127,7 +131,7 @@ const SignupPage = () => {
                         name="phone"
                         value={formData.phone}
                         onChange={handleChange}
-                        placeholder="9841234567"
+                        placeholder="+977 9841234567"
                     />
 
                     <Button

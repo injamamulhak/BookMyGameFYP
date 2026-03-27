@@ -1,4 +1,7 @@
 const prisma = require('../config/prisma');
+const { getIo } = require('../socket');
+const { computeRefundAmount, initiateKhaltiRefund, getRefundMessage } = require('../services/refund.service');
+const emailService = require('../services/email.service');
 
 /**
  * Booking Controller
@@ -190,7 +193,23 @@ const confirmBooking = async (req, res) => {
             },
         });
 
-        // TODO: Send confirmation notification to user
+        // Send confirmation notification to user
+        const notification = await prisma.notification.create({
+            data: {
+                userId: booking.userId,
+                type: 'booking_confirmed',
+                title: 'Booking Confirmed',
+                message: `Your booking at ${updatedBooking.slot.venue.name} has been confirmed.`,
+                relatedEntityType: 'booking',
+                relatedEntityId: booking.id
+            }
+        });
+
+        try {
+            getIo().to(booking.userId).emit('new_notification', notification);
+        } catch (socketErr) {
+            console.error('Socket error emitting booking_confirmed:', socketErr);
+        }
 
         res.json({
             success: true,
@@ -260,7 +279,23 @@ const cancelBooking = async (req, res) => {
             },
         });
 
-        // TODO: Send cancellation notification to user
+        // Send cancellation notification to user
+        const notification = await prisma.notification.create({
+            data: {
+                userId: booking.userId,
+                type: 'booking_cancelled',
+                title: 'Booking Cancelled',
+                message: `Your booking at ${updatedBooking.slot.venue.name} was cancelled by the operator.`,
+                relatedEntityType: 'booking',
+                relatedEntityId: booking.id
+            }
+        });
+
+        try {
+            getIo().to(booking.userId).emit('new_notification', notification);
+        } catch (socketErr) {
+            console.error('Socket error emitting booking_cancelled:', socketErr);
+        }
         // TODO: Handle refund if payment was made
 
         res.json({
@@ -362,8 +397,9 @@ const getUserBookings = async (req, res) => {
                     slot: {
                         include: {
                             venue: {
-                                select: { id: true, name: true, address: true, city: true },
-                                include: { images: { where: { isPrimary: true }, take: 1 } },
+                                include: {
+                                    images: { where: { isPrimary: true }, take: 1 }
+                                },
                             },
                         },
                     },
@@ -398,58 +434,189 @@ const getUserBookings = async (req, res) => {
 };
 
 /**
+ * Get user booking details by ID
+ * GET /api/bookings/my-bookings/:id
+ */
+const getUserBookingById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        const booking = await prisma.booking.findFirst({
+            where: { id, userId },
+            include: {
+                slot: {
+                    include: {
+                        venue: {
+                            include: {
+                                operator: { select: { fullName: true, email: true, phone: true } },
+                                images: { where: { isPrimary: true }, take: 1 },
+                                sport: true,
+                            },
+                        },
+                    },
+                },
+                payments: true,
+                review: true,
+            },
+        });
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found',
+            });
+        }
+
+        res.json({
+            success: true,
+            data: booking,
+        });
+    } catch (error) {
+        console.error('Error fetching booking details:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch booking details',
+        });
+    }
+};
+
+/**
  * Create new booking
  * POST /api/bookings
+ * Supports two modes:
+ * 1. slotId - Use existing time slot
+ * 2. venueId + date + startTime + endTime - Create slot dynamically
  */
 const createBooking = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { slotId, notes } = req.body;
+        const { slotId, venueId, date, startTime, endTime, totalPrice, notes } = req.dto;
 
-        if (!slotId) {
+        // Debug logging
+        console.log('Creating booking with:', { slotId, venueId, date, startTime, endTime, totalPrice, userId });
+
+        let slot;
+
+        // Mode 1: Using existing slotId
+        if (slotId) {
+            slot = await prisma.timeSlot.findUnique({
+                where: { id: slotId },
+                include: {
+                    venue: { select: { id: true, name: true, approvalStatus: true, isActive: true } },
+                    bookings: { where: { status: { not: 'cancelled' } } },
+                },
+            });
+
+            if (!slot) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Time slot not found',
+                });
+            }
+
+            if (slot.bookings.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'This time slot is already booked',
+                });
+            }
+        }
+        // Mode 2: Using venueId + date + time (create slot dynamically)
+        else if (venueId && date && startTime && endTime) {
+            // Check venue exists and is available
+            const venue = await prisma.venue.findUnique({
+                where: { id: venueId },
+                select: { id: true, name: true, approvalStatus: true, isActive: true, pricePerHour: true },
+            });
+
+            if (!venue) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Venue not found',
+                });
+            }
+
+            if (!venue.isActive || venue.approvalStatus !== 'approved') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Venue is not available for booking',
+                });
+            }
+
+            // Check if slot already exists for this date/time
+            // Parse time strings to Date format (handle both "14:00" and "1970-01-01T14:00:00.000Z" formats)
+            const parseTimeToDate = (timeValue) => {
+                if (!timeValue) return null;
+                // If it's already a valid ISO date string
+                const isoDate = new Date(timeValue);
+                if (!isNaN(isoDate.getTime())) {
+                    return isoDate;
+                }
+                // Otherwise treat as simple time string like "14:00"
+                return new Date(`1970-01-01T${timeValue}:00.000Z`);
+            };
+
+            const parsedStartTime = parseTimeToDate(startTime);
+            const parsedEndTime = parseTimeToDate(endTime);
+
+            const existingSlot = await prisma.timeSlot.findFirst({
+                where: {
+                    venueId,
+                    date: new Date(date),
+                    startTime: parsedStartTime,
+                    endTime: parsedEndTime,
+                },
+                include: {
+                    bookings: { where: { status: { not: 'cancelled' } } },
+                },
+            });
+
+            if (existingSlot) {
+                if (existingSlot.bookings.length > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'This time slot is already booked',
+                    });
+                }
+                slot = existingSlot;
+            } else {
+                // Create new time slot
+                slot = await prisma.timeSlot.create({
+                    data: {
+                        venueId,
+                        date: new Date(date),
+                        startTime: parsedStartTime,
+                        endTime: parsedEndTime,
+                        price: totalPrice || venue.pricePerHour,
+                    },
+                    include: {
+                        venue: { select: { id: true, name: true } },
+                    },
+                });
+            }
+        } else {
             return res.status(400).json({
                 success: false,
-                message: 'Slot ID is required',
-            });
-        }
-
-        // Get slot details
-        const slot = await prisma.timeSlot.findUnique({
-            where: { id: slotId },
-            include: {
-                venue: { select: { id: true, name: true, approvalStatus: true, isActive: true } },
-                bookings: { where: { status: { not: 'cancelled' } } },
-            },
-        });
-
-        if (!slot) {
-            return res.status(404).json({
-                success: false,
-                message: 'Time slot not found',
+                message: 'Either slotId or (venueId, date, startTime, endTime) is required',
             });
         }
 
         // Check if venue is available
-        if (!slot.venue.isActive || slot.venue.approvalStatus !== 'approved') {
+        if (slot.venue && (!slot.venue.isActive || slot.venue.approvalStatus !== 'approved')) {
             return res.status(400).json({
                 success: false,
                 message: 'Venue is not available for booking',
             });
         }
 
-        // Check if slot is already booked
-        if (slot.bookings.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'This time slot is already booked',
-            });
-        }
-
+        // Create booking
         const booking = await prisma.booking.create({
             data: {
                 userId,
-                slotId,
-                totalPrice: slot.price,
+                slotId: slot.id,
+                bookingDate: slot.date,
+                totalPrice: totalPrice || slot.price,
                 status: 'pending',
                 notes,
             },
@@ -485,32 +652,54 @@ const cancelUserBooking = async (req, res) => {
 
         const booking = await prisma.booking.findFirst({
             where: { id, userId },
-            include: { slot: true },
+            include: {
+                slot: {
+                    include: {
+                        venue: { select: { id: true, name: true, address: true, operatorId: true } },
+                    },
+                },
+                payments: {
+                    where: { status: 'completed' },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                },
+                user: { select: { id: true, fullName: true, email: true } },
+            },
         });
 
         if (!booking) {
-            return res.status(404).json({
-                success: false,
-                message: 'Booking not found',
-            });
+            return res.status(404).json({ success: false, message: 'Booking not found' });
         }
 
         if (booking.status === 'cancelled') {
-            return res.status(400).json({
-                success: false,
-                message: 'Booking is already cancelled',
-            });
+            return res.status(400).json({ success: false, message: 'Booking is already cancelled' });
         }
 
-        // Check if booking is in the past
-        const bookingDate = new Date(booking.slot.date);
-        if (bookingDate < new Date()) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cannot cancel past bookings',
-            });
+        // Build a full datetime for the booking start (date + startTime hours)
+        const slotDate = new Date(booking.slot.date);
+        const slotStart = new Date(booking.slot.startTime); // stored as 1970-01-01THH:mm
+        const bookingStartDateTime = new Date(
+            Date.UTC(
+                slotDate.getUTCFullYear(),
+                slotDate.getUTCMonth(),
+                slotDate.getUTCDate(),
+                slotStart.getUTCHours(),
+                slotStart.getUTCMinutes(),
+                0
+            )
+        );
+
+        // Check if booking has already started
+        if (bookingStartDateTime < new Date()) {
+            return res.status(400).json({ success: false, message: 'Cannot cancel a booking that has already started or passed' });
         }
 
+        // Compute refund
+        const paidPayment = booking.payments[0] || null;
+        const paidAmount = paidPayment ? parseFloat(paidPayment.amount) : 0;
+        const { refundPercent, refundAmount, tier } = computeRefundAmount(bookingStartDateTime, paidAmount);
+
+        // Cancel booking
         const updatedBooking = await prisma.booking.update({
             where: { id },
             data: {
@@ -519,16 +708,176 @@ const cancelUserBooking = async (req, res) => {
             },
         });
 
+        // Process refund if applicable
+        let refundResult = null;
+        if (paidPayment && refundAmount > 0) {
+            // Get original pidx from gateway response
+            const pidx = paidPayment.gatewayResponse?.pidx || paidPayment.transactionId;
+            if (pidx) {
+                refundResult = await initiateKhaltiRefund(pidx, refundAmount);
+                // Update payment record with refund info
+                await prisma.payment.update({
+                    where: { id: paidPayment.id },
+                    data: {
+                        refundAmount,
+                        refundedAt: new Date(),
+                        refundStatus: refundResult.success ? 'initiated' : 'failed',
+                        refundPidx: refundResult.refundPidx || null,
+                    },
+                });
+            }
+        }
+
+        const refundMsg = getRefundMessage(tier, refundAmount);
+
+        // Notify user in-app
+        const userNotification = await prisma.notification.create({
+            data: {
+                userId,
+                type: 'booking_cancelled',
+                title: 'Booking Cancelled',
+                message: `Your booking at ${booking.slot.venue.name} on ${slotDate.toDateString()} has been cancelled. ${refundMsg}`,
+                relatedEntityType: 'booking',
+                relatedEntityId: id,
+            },
+        });
+        try { getIo().to(userId).emit('new_notification', userNotification); } catch (e) { /* ignore socket errors */ }
+
+        // Notify operator in-app
+        const opNotification = await prisma.notification.create({
+            data: {
+                userId: booking.slot.venue.operatorId,
+                type: 'booking_cancelled',
+                title: 'Booking Cancelled by User',
+                message: `${booking.user.fullName} has cancelled their booking at ${booking.slot.venue.name} on ${slotDate.toDateString()}.`,
+                relatedEntityType: 'booking',
+                relatedEntityId: id,
+            },
+        });
+        try { getIo().to(booking.slot.venue.operatorId).emit('new_notification', opNotification); } catch (e) { /* ignore */ }
+
+        // Send cancellation email to user
+        try {
+            await emailService.sendCancellationEmail(booking.user.email, {
+                userName: booking.user.fullName,
+                venueName: booking.slot.venue.name,
+                bookingDate: slotDate,
+                refundAmount,
+                refundPercent,
+                bookingId: id,
+            });
+        } catch (emailErr) { console.error('Cancellation email error:', emailErr); }
+
         res.json({
             success: true,
             message: 'Booking cancelled successfully',
-            data: updatedBooking,
+            data: { ...updatedBooking, refundInfo: { refundPercent, refundAmount, tier, message: refundMsg } },
         });
     } catch (error) {
         console.error('Error cancelling booking:', error);
+        res.status(500).json({ success: false, message: 'Failed to cancel booking' });
+    }
+};
+
+
+/**
+ * Create a walk-in booking as an operator
+ * POST /api/bookings/operator/walk-in
+ * Creates a TimeSlot (if not exists) and a confirmed Booking for it
+ */
+const createOperatorBooking = async (req, res) => {
+    try {
+        const operatorId = req.user.id;
+        const { venueId, date, startTime, endTime, guestName, price } = req.body;
+
+        if (!venueId || !date || !startTime || !endTime) {
+            return res.status(400).json({
+                success: false,
+                message: 'venueId, date, startTime, and endTime are required',
+            });
+        }
+
+        // Check venue ownership
+        const venue = await prisma.venue.findFirst({
+            where: { id: venueId, operatorId },
+        });
+
+        if (!venue) {
+            return res.status(404).json({
+                success: false,
+                message: 'Venue not found or access denied',
+            });
+        }
+
+        // Parse times
+        const parseTime = (t) => {
+            if (t.includes('T')) return new Date(t);
+            return new Date(`1970-01-01T${t}:00.000Z`);
+        };
+
+        const parsedDate = new Date(date);
+        const parsedStart = parseTime(startTime);
+        const parsedEnd = parseTime(endTime);
+
+        // Find existing slot or create one
+        let slot = await prisma.timeSlot.findFirst({
+            where: {
+                venueId,
+                date: parsedDate,
+                startTime: parsedStart,
+                endTime: parsedEnd,
+            },
+            include: {
+                bookings: { where: { status: { not: 'cancelled' } } },
+            },
+        });
+
+        if (slot && slot.bookings.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'This time slot is already booked',
+            });
+        }
+
+        if (!slot) {
+            slot = await prisma.timeSlot.create({
+                data: {
+                    venueId,
+                    date: parsedDate,
+                    startTime: parsedStart,
+                    endTime: parsedEnd,
+                    price: price || venue.pricePerHour,
+                },
+            });
+        }
+
+        // Create booking with operator as the user
+        const booking = await prisma.booking.create({
+            data: {
+                userId: operatorId,
+                slotId: slot.id,
+                bookingDate: parsedDate,
+                totalPrice: price || slot.price || venue.pricePerHour,
+                status: 'confirmed',
+                notes: `Walk-in booking by operator for: ${guestName || 'Walk-in Guest'}`,
+            },
+            include: {
+                slot: {
+                    include: { venue: { select: { id: true, name: true } } },
+                },
+            },
+        });
+
+        res.status(201).json({
+            success: true,
+            message: `Walk-in booking created for ${guestName || 'Walk-in Guest'}`,
+            data: booking,
+        });
+    } catch (error) {
+        console.error('Error creating operator booking:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to cancel booking',
+            message: 'Failed to create walk-in booking',
         });
     }
 };
@@ -540,8 +889,10 @@ module.exports = {
     confirmBooking,
     cancelBooking,
     getBookingCalendar,
+    createOperatorBooking,
     // User
     getUserBookings,
+    getUserBookingById,
     createBooking,
     cancelUserBooking,
 };

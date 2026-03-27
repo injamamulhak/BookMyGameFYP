@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 
@@ -7,9 +7,14 @@ function AdminDashboard() {
     const [recentVenues, setRecentVenues] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    const hasFetched = useRef(false);
 
     useEffect(() => {
         const fetchDashboard = async () => {
+            // Prevent duplicate API calls
+            if (hasFetched.current) return;
+            hasFetched.current = true;
+
             try {
                 setIsLoading(true);
                 const response = await api.get('/admin/dashboard');

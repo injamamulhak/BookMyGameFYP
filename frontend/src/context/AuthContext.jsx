@@ -54,11 +54,7 @@ export const AuthProvider = ({ children }) => {
     const signup = async (userData) => {
         try {
             const response = await authService.signup(userData);
-            if (response.success) {
-                setUser(response.data.user);
-                setIsAuthenticated(true);
-                return response;
-            }
+            return response;
         } catch (error) {
             throw error;
         }

@@ -3,11 +3,23 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import MapPicker from '../../components/common/MapPicker';
 import ImageUploader from '../../components/common/ImageUploader';
+import { useAuth } from '../../context/AuthContext';
+
+const NEPAL_LOCATIONS = {
+    "Koshi Province": ["Biratnagar", "Dharan", "Itahari", "Bhadrapur", "Birtamod", "Damak", "Ilam", "Dhankuta", "Khandbari", "Inaruwa"],
+    "Madhesh Province": ["Janakpur", "Birgunj", "Lahan", "Rajbiraj", "Jaleshwar", "Malangwa", "Gaur", "Kalaiya", "Siraha"],
+    "Bagmati Province": ["Kathmandu", "Lalitpur", "Bhaktapur", "Hetauda", "Bharatpur", "Banepa", "Dhulikhel", "Panauti", "Bidur", "Kamalamai"],
+    "Gandaki Province": ["Pokhara", "Baglung", "Gorkha", "Waling", "Vyas", "Kawasoti", "Besisahar", "Putalibazar", "Beni"],
+    "Lumbini Province": ["Butwal", "Bhairahawa", "Nepalgunj", "Tansen", "Ghorahi", "Tulsipur", "Taulihawa", "Kohalpur", "Lumbini Sanskritik", "Bhalubang"],
+    "Karnali Province": ["Birendranagar", "Jumla", "Dailekh", "Chhedagad", "Khandachakra", "Tribeni Nalagad", "Bheriganga", "Dullu"],
+    "Sudurpashchim Province": ["Dhangadhi", "Mahendranagar", "Tikapur", "Dipayal Silgadhi", "Amargadhi", "Dasharathchand", "Punarbas", "Shuklaphanta"]
+};
 
 function AddEditVenue() {
     const { id } = useParams();
     const navigate = useNavigate();
     const isEditMode = Boolean(id);
+    const { user } = useAuth();
 
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
@@ -27,12 +39,12 @@ function AddEditVenue() {
         latitude: '',
         longitude: '',
         pricePerHour: '',
-        contactPhone: '',
-        contactEmail: '',
+        contactPhone: user?.phone || '',
+        contactEmail: user?.email || '',
         amenities: [],
         selectedSport: '', // Single sport selection
         operatingHours: [
-            { dayOfWeek: 0, isClosed: true, openingTime: '', closingTime: '' },
+            { dayOfWeek: 0, isClosed: false, openingTime: '07:00', closingTime: '20:00' },
             { dayOfWeek: 1, isClosed: false, openingTime: '06:00', closingTime: '22:00' },
             { dayOfWeek: 2, isClosed: false, openingTime: '06:00', closingTime: '22:00' },
             { dayOfWeek: 3, isClosed: false, openingTime: '06:00', closingTime: '22:00' },
@@ -89,14 +101,31 @@ function AddEditVenue() {
                     contactEmail: venue.contactEmail || '',
                     amenities: venue.amenities || [],
                     selectedSport: venue.sportId || '', // Single sport
-                    operatingHours: venue.operatingHours?.length > 0
-                        ? venue.operatingHours.map(h => ({
-                            dayOfWeek: h.dayOfWeek,
-                            isClosed: h.isClosed,
-                            openingTime: h.openingTime ? new Date(h.openingTime).toTimeString().slice(0, 5) : '',
-                            closingTime: h.closingTime ? new Date(h.closingTime).toTimeString().slice(0, 5) : '',
-                        }))
-                        : formData.operatingHours,
+                    operatingHours: (() => {
+                        const defaultHours = [
+                            { dayOfWeek: 0, isClosed: false, openingTime: '07:00', closingTime: '20:00' },
+                            { dayOfWeek: 1, isClosed: false, openingTime: '06:00', closingTime: '22:00' },
+                            { dayOfWeek: 2, isClosed: false, openingTime: '06:00', closingTime: '22:00' },
+                            { dayOfWeek: 3, isClosed: false, openingTime: '06:00', closingTime: '22:00' },
+                            { dayOfWeek: 4, isClosed: false, openingTime: '06:00', closingTime: '22:00' },
+                            { dayOfWeek: 5, isClosed: false, openingTime: '06:00', closingTime: '22:00' },
+                            { dayOfWeek: 6, isClosed: false, openingTime: '07:00', closingTime: '20:00' },
+                        ];
+                        return defaultHours.map(def => {
+                            const h = venue.operatingHours?.find(oh => oh.dayOfWeek === def.dayOfWeek);
+                            if (!h) return def;
+                            return {
+                                dayOfWeek: h.dayOfWeek,
+                                isClosed: h.isClosed,
+                                openingTime: h.openingTime
+                                    ? `${String(new Date(h.openingTime).getUTCHours()).padStart(2, '0')}:${String(new Date(h.openingTime).getUTCMinutes()).padStart(2, '0')}`
+                                    : '',
+                                closingTime: h.closingTime
+                                    ? `${String(new Date(h.closingTime).getUTCHours()).padStart(2, '0')}:${String(new Date(h.closingTime).getUTCMinutes()).padStart(2, '0')}`
+                                    : '',
+                            };
+                        });
+                    })(),
                     images: venue.images || [],
                 });
             }
@@ -152,6 +181,16 @@ function AddEditVenue() {
 
         if (stepNum === 2) {
             if (!formData.address.trim()) newErrors.address = 'Address is required';
+            if (!formData.contactPhone.trim()) {
+                newErrors.contactPhone = 'Contact phone is required';
+            } else if (!/^(?:\+977[- ]?)?(?:98|97|96)[0-9]{8}$/.test(formData.contactPhone)) {
+                newErrors.contactPhone = 'Valid Nepal phone number required (e.g., +977 98XXXXXXXX)';
+            }
+            if (!formData.contactEmail.trim()) {
+                newErrors.contactEmail = 'Contact email is required';
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactEmail)) {
+                newErrors.contactEmail = 'Valid email address required';
+            }
         }
 
         setErrors(newErrors);
@@ -197,7 +236,7 @@ function AddEditVenue() {
                 contactEmail: formData.contactEmail,
                 amenities: formData.amenities,
                 sportId: formData.selectedSport, // Single sport
-                operatingHours: formData.operatingHours.filter(h => !h.isClosed || h.dayOfWeek === 0),
+                operatingHours: formData.operatingHours, // Always include all 7 days so closed status persists
             };
 
             if (isEditMode) {
@@ -223,12 +262,13 @@ function AddEditVenue() {
                     try {
                         await api.post(
                             `/venues/operator/my-venues/${newVenueId}/images`,
-                            formDataUpload
+                            formDataUpload,
+                            { headers: { 'Content-Type': 'multipart/form-data' } }
                         );
                         console.log('Images uploaded successfully');
                     } catch (imgErr) {
                         console.error('Image upload failed:', imgErr.response?.data || imgErr.message);
-                        alert('Venue created but image upload failed. You can add images later.');
+                        alert(`Venue created but image upload failed: ${imgErr.response?.data?.message || imgErr.message}. You can try adding images again in edit mode.`);
                     }
                 }
 
@@ -404,26 +444,36 @@ function AddEditVenue() {
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">State/Province</label>
+                                <select
+                                    name="state"
+                                    value={formData.state}
+                                    onChange={(e) => {
+                                        const { name, value } = e.target;
+                                        setFormData(prev => ({ ...prev, [name]: value, city: '' }));
+                                    }}
+                                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                                >
+                                    <option value="">Select Province</option>
+                                    {Object.keys(NEPAL_LOCATIONS).map(prov => (
+                                        <option key={prov} value={prov}>{prov}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                                <input
-                                    type="text"
+                                <select
                                     name="city"
                                     value={formData.city}
                                     onChange={handleInputChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                    placeholder="Kathmandu"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">State/Province</label>
-                                <input
-                                    type="text"
-                                    name="state"
-                                    value={formData.state}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                    placeholder="Bagmati"
-                                />
+                                    disabled={!formData.state || !NEPAL_LOCATIONS[formData.state]}
+                                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-400"
+                                >
+                                    <option value="">Select City</option>
+                                    {formData.state && NEPAL_LOCATIONS[formData.state]?.map(city => (
+                                        <option key={city} value={city}>{city}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Postal Code</label>
@@ -440,29 +490,30 @@ function AddEditVenue() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Contact Phone</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Contact Phone *</label>
                                 <input
                                     type="tel"
                                     name="contactPhone"
                                     value={formData.contactPhone}
                                     onChange={handleInputChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                                    placeholder="9841234567"
+                                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 ${errors.contactPhone ? 'border-red-500' : 'border-gray-300'}`}
+                                    placeholder="+977 98XXXXXXXX"
                                 />
+                                {errors.contactPhone && <p className="mt-1 text-sm text-red-500">{errors.contactPhone}</p>}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Contact Email</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Contact Email *</label>
                                 <input
                                     type="email"
                                     name="contactEmail"
                                     value={formData.contactEmail}
                                     onChange={handleInputChange}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary-500 ${errors.contactEmail ? 'border-red-500' : 'border-gray-300'}`}
                                     placeholder="contact@venue.com"
                                 />
+                                {errors.contactEmail && <p className="mt-1 text-sm text-red-500">{errors.contactEmail}</p>}
                             </div>
                         </div>
-
                         {/* Map Picker for Location */}
                         <MapPicker
                             latitude={formData.latitude ? parseFloat(formData.latitude) : null}
@@ -481,12 +532,49 @@ function AddEditVenue() {
                 {/* Step 3: Schedule */}
                 {step === 3 && (
                     <div className="space-y-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Operating Hours</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1">Operating Hours</h2>
                         <p className="text-sm text-gray-500 mb-4">Set your venue's operating hours for each day of the week.</p>
 
-                        <div className="space-y-4">
+                        {/* ── Bulk setter ── */}
+                        <div className="flex flex-wrap items-center gap-3 p-4 bg-primary-50 border border-primary-200 rounded-xl">
+                            <span className="text-sm font-semibold text-primary-800 whitespace-nowrap">Set All Open Days:</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <input
+                                    type="time"
+                                    id="bulk-open"
+                                    className="px-3 py-2 border border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                                    onChange={(e) => {
+                                        if (!e.target.value) return;
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            operatingHours: prev.operatingHours.map(h =>
+                                                h.isClosed ? h : { ...h, openingTime: e.target.value }
+                                            )
+                                        }));
+                                    }}
+                                />
+                                <span className="text-primary-700 text-sm">to</span>
+                                <input
+                                    type="time"
+                                    id="bulk-close"
+                                    className="px-3 py-2 border border-primary-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                                    onChange={(e) => {
+                                        if (!e.target.value) return;
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            operatingHours: prev.operatingHours.map(h =>
+                                                h.isClosed ? h : { ...h, closingTime: e.target.value }
+                                            )
+                                        }));
+                                    }}
+                                />
+                                <span className="text-xs text-primary-600 italic">Changes apply instantly to all open days also you can customise individually below.</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
                             {formData.operatingHours.map((hour, index) => (
-                                <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                                <div key={index} className={`flex items-center gap-4 p-4 rounded-lg border transition-colors ${hour.isClosed ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-white border-gray-200'}`}>
                                     <div className="w-28 font-medium text-gray-700">
                                         {dayNames[hour.dayOfWeek]}
                                     </div>
@@ -507,22 +595,26 @@ function AddEditVenue() {
                                                 type="time"
                                                 value={hour.openingTime}
                                                 onChange={(e) => handleOperatingHourChange(index, 'openingTime', e.target.value)}
-                                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                                             />
-                                            <span className="text-gray-500">to</span>
+                                            <span className="text-gray-400 text-sm">to</span>
                                             <input
                                                 type="time"
                                                 value={hour.closingTime}
                                                 onChange={(e) => handleOperatingHourChange(index, 'closingTime', e.target.value)}
-                                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
                                             />
                                         </>
+                                    )}
+                                    {hour.isClosed && (
+                                        <span className="text-sm text-gray-400 italic">Closed all day</span>
                                     )}
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
+
 
                 {/* Step 4: Amenities */}
                 {step === 4 && (
@@ -688,7 +780,7 @@ function AddEditVenue() {
                                                 }
                                             } catch (err) {
                                                 console.error('Image upload error:', err);
-                                                alert(err.response?.data?.message || 'Failed to upload images');
+                                                alert(err.response?.data?.message || err.message || 'Failed to upload images');
                                                 throw err;
                                             }
                                         }}

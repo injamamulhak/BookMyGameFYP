@@ -7,6 +7,8 @@ import 'leaflet/dist/leaflet.css';
  */
 function MapPicker({ latitude, longitude, onChange, className = '' }) {
     const [isLoaded, setIsLoaded] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
     const [leafletModules, setLeafletModules] = useState(null);
     const mapContainerRef = useRef(null);
     const mapInstanceRef = useRef(null);
@@ -66,7 +68,7 @@ function MapPicker({ latitude, longitude, onChange, className = '' }) {
         }).addTo(map);
 
         // Add click handler
-        map.on('click', (e) => {
+        map.on('click', async (e) => {
             const { lat, lng } = e.latlng;
 
             // Update or create marker
@@ -79,6 +81,17 @@ function MapPicker({ latitude, longitude, onChange, className = '' }) {
             // Callback
             if (onChange) {
                 onChange(lat, lng);
+            }
+
+            // Reverse geocode to populate search bar
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                const data = await response.json();
+                if (data && data.display_name) {
+                    setSearchQuery(data.display_name);
+                }
+            } catch (error) {
+                console.error('Reverse geocoding error:', error);
             }
         });
 
@@ -111,13 +124,30 @@ function MapPicker({ latitude, longitude, onChange, className = '' }) {
     const handleUseMyLocation = () => {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                (pos) => {
+                async (pos) => {
                     const { latitude: lat, longitude: lng } = pos.coords;
                     if (onChange) {
                         onChange(lat, lng);
                     }
                     if (mapInstanceRef.current) {
                         mapInstanceRef.current.setView([lat, lng], 15);
+                        
+                        if (markerRef.current) {
+                            markerRef.current.setLatLng([lat, lng]);
+                        } else {
+                            markerRef.current = leafletModules.marker([lat, lng]).addTo(mapInstanceRef.current);
+                        }
+                    }
+
+                    // Reverse geocode to populate search bar
+                    try {
+                        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                        const data = await response.json();
+                        if (data && data.display_name) {
+                            setSearchQuery(data.display_name);
+                        }
+                    } catch (error) {
+                        console.error('Reverse geocoding error:', error);
                     }
                 },
                 (error) => {
@@ -141,6 +171,41 @@ function MapPicker({ latitude, longitude, onChange, className = '' }) {
         }
     };
 
+    const handleSearch = async (e) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+
+        setIsSearching(true);
+        try {
+            // Using OpenStreetMap Nominatim for free geocoding
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`);
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+                const { lat, lon } = data[0];
+                const newLat = parseFloat(lat);
+                const newLng = parseFloat(lon);
+
+                // Update map view
+                if (mapInstanceRef.current) {
+                    mapInstanceRef.current.setView([newLat, newLng], 15);
+                }
+
+                // Automatically position the pin marker at the searched location
+                if (onChange) {
+                    onChange(newLat, newLng);
+                }
+            } else {
+                alert('Location not found. Please try a different search term.');
+            }
+        } catch (error) {
+            console.error('Search error:', error);
+            alert('Failed to search location.');
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
     return (
         <div className={`space-y-3 ${className}`}>
             <div className="flex items-center justify-between">
@@ -160,9 +225,34 @@ function MapPicker({ latitude, longitude, onChange, className = '' }) {
                 </button>
             </div>
 
-            <p className="text-xs text-gray-500 -mt-1">
-                Click on the map to set your venue's exact location
-            </p>
+            <div className="flex flex-col gap-2 -mt-1 mb-2">
+                <p className="text-xs text-gray-500">
+                    Search for an area, or click "Use My Location" or click directly on the map.
+                </p>
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault(); // Stop parent form submission
+                                handleSearch(e);
+                            }
+                        }}
+                        placeholder="Search location (e.g. Baneshwor, Kathmandu)"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                    />
+                    <button
+                        type="button"
+                        onClick={handleSearch}
+                        disabled={isSearching}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                        {isSearching ? 'Searching...' : 'Search'}
+                    </button>
+                </div>
+            </div>
 
             <div
                 ref={mapContainerRef}

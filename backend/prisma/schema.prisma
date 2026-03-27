@@ -108,6 +108,9 @@ model User {
   orders                Order[]
   payments              Payment[]
   notifications         Notification[]
+  productsSelling       Product[]            @relation("ProductSeller")
+  canSellProducts       Boolean              @default(false) @map("can_sell_products")
+  sellerRequestStatus   String               @default("none") @map("seller_request_status") @db.VarChar(20)
 
   @@index([email])
   @@index([role])
@@ -268,13 +271,15 @@ model UserFavoriteVenue {
 
 // TimeSlot model (matches your proposal: users book venue time slots)
 model TimeSlot {
-  id        String   @id @default(uuid())
-  venueId   String   @map("venue_id")
-  date      DateTime @db.Date
-  startTime DateTime @map("start_time") @db.Time
-  endTime   DateTime @map("end_time") @db.Time
-  price     Decimal  @db.Decimal(10, 2)
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String    @id @default(uuid())
+  venueId   String    @map("venue_id")
+  date      DateTime  @db.Date
+  startTime DateTime  @map("start_time") @db.Time
+  endTime   DateTime  @map("end_time") @db.Time
+  price     Decimal   @db.Decimal(10, 2)
+  lockedBy  String?   @map("locked_by") @db.VarChar(36)
+  lockedAt  DateTime? @map("locked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   venue    Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
   bookings Booking[]
@@ -310,21 +315,28 @@ model Payment {
   id              String        @id @default(uuid())
   bookingId       String?       @map("booking_id")
   orderId         String?       @map("order_id")
+  registrationId  String?       @map("registration_id")
   userId          String        @map("user_id")
   amount          Decimal       @db.Decimal(10, 2)
   paymentMethod   String        @default("khalti") @map("payment_method") @db.VarChar(50)
   transactionId   String?       @unique @map("transaction_id") @db.VarChar(255)
   status          PaymentStatus @default(pending)
   gatewayResponse Json?         @map("gateway_response")
+  refundAmount    Decimal?      @map("refund_amount") @db.Decimal(10, 2)
+  refundedAt      DateTime?     @map("refunded_at")
+  refundStatus    String?       @map("refund_status") @db.VarChar(20)
+  refundPidx      String?       @map("refund_pidx") @db.VarChar(255)
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  order   Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking      Booking?           @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  order        Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  registration EventRegistration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([bookingId])
   @@index([orderId])
+  @@index([registrationId])
   @@index([userId])
   @@index([status])
   @@map("payments")
@@ -358,19 +370,23 @@ model Review {
 // ============================================
 
 model Event {
-  id              String    @id @default(uuid())
-  venueId         String    @map("venue_id")
-  title           String    @db.VarChar(255)
-  description     String?
-  eventType       EventType @map("event_type")
-  startDate       DateTime  @map("start_date") @db.Date
-  endDate         DateTime  @map("end_date") @db.Date
-  registrationFee Decimal   @default(0) @map("registration_fee") @db.Decimal(10, 2)
-  maxParticipants Int?      @map("max_participants")
-  imageUrl        String?   @map("image_url")
-  isFeatured      Boolean   @default(false) @map("is_featured")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id                   String    @id @default(uuid())
+  venueId              String    @map("venue_id")
+  title                String    @db.VarChar(255)
+  description          String?
+  eventType            EventType @map("event_type")
+  startDate            DateTime  @map("start_date") @db.Date
+  endDate              DateTime  @map("end_date") @db.Date
+  startTime            DateTime? @map("start_time") @db.Time
+  endTime              DateTime? @map("end_time") @db.Time
+  slots                Json?     // Precise non-contiguous blocked slots array [{date, startTime, endTime}]
+  registrationFee      Decimal   @default(0) @map("registration_fee") @db.Decimal(10, 2)
+  maxParticipants      Int?      @map("max_participants")
+  imageUrl             String?   @map("image_url")
+  isFeatured           Boolean   @default(false) @map("is_featured")
+  registrationDeadline DateTime? @map("registration_deadline")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   venue         Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
   registrations EventRegistration[]
@@ -388,8 +404,9 @@ model EventRegistration {
   paymentStatus PaymentStatus @default(pending) @map("payment_status")
   registeredAt  DateTime      @default(now()) @map("registered_at")
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event    Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments Payment[]
 
   @@unique([eventId, userId])
   @@index([eventId])
@@ -427,21 +444,25 @@ model TrainingVideo {
 // ============================================
 
 model Product {
-  id          String   @id @default(uuid())
-  name        String   @db.VarChar(255)
-  description String?
-  category    String   @db.VarChar(100)
-  price       Decimal  @db.Decimal(10, 2)
-  stock       Int      @default(0)
-  imageUrl    String?  @map("image_url")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  sellerId      String?  @map("seller_id")
+  name          String   @db.VarChar(255)
+  description   String?
+  category      String   @db.VarChar(100)
+  price         Decimal  @db.Decimal(10, 2)
+  originalPrice Decimal? @map("original_price") @db.Decimal(10, 2)
+  stock         Int      @default(0)
+  imageUrl      String?  @map("image_url")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
+  seller     User?       @relation("ProductSeller", fields: [sellerId], references: [id], onDelete: SetNull)
   orderItems OrderItem[]
 
   @@index([category])
   @@index([isActive])
+  @@index([sellerId])
   @@map("products")
 }
 

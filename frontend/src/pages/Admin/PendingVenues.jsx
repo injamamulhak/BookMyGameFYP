@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 
@@ -9,8 +9,12 @@ function PendingVenues() {
     const [processingId, setProcessingId] = useState(null);
     const [showRejectModal, setShowRejectModal] = useState(null);
     const [rejectReason, setRejectReason] = useState('');
+    const hasFetched = useRef(false);
 
     const fetchPendingVenues = async () => {
+        // Prevent duplicate API calls
+        if (hasFetched.current) return;
+        hasFetched.current = true;
         try {
             setIsLoading(true);
             const response = await api.get('/admin/venues/pending');

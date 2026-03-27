@@ -71,4 +71,41 @@ const auth = async (req, res, next) => {
     }
 };
 
-module.exports = auth;
+/**
+ * Optional Authentication Middleware
+ * Attaches user if authenticated, but allows unauthenticated access
+ */
+const optionalAuth = async (req, res, next) => {
+    try {
+        const token = req.header('Authorization')?.replace('Bearer ', '');
+
+        if (!token) {
+            return next();
+        }
+
+        const decoded = jwt.verify(token, config.jwt.secret);
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.id },
+            select: {
+                id: true,
+                email: true,
+                fullName: true,
+                role: true,
+                isVerified: true,
+                profileImage: true,
+            },
+        });
+
+        if (user) {
+            req.user = user;
+            req.token = token;
+        }
+
+        next();
+    } catch (error) {
+        // If token is invalid, just continue without user
+        next();
+    }
+};
+
+module.exports = { auth, optionalAuth };

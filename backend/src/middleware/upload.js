@@ -37,23 +37,56 @@ if (isCloudinaryConfigured) {
     console.log('📸 Using Cloudinary for image uploads');
 } else {
     // Fallback to local storage
-    const uploadDir = 'uploads/venues';
-    if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-    }
+    const uploadDirs = ['uploads/venues', 'uploads/products', 'uploads/users', 'uploads/events', 'uploads/misc'];
+    uploadDirs.forEach(dir => {
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+    });
 
     storage = multer.diskStorage({
         destination: (req, file, cb) => {
-            cb(null, uploadDir);
+            let folder = 'misc';
+            if (req.query.folder) {
+                folder = req.query.folder;
+            } else if (req.originalUrl.includes('/products')) {
+                folder = 'products';
+            } else if (req.originalUrl.includes('/venues')) {
+                folder = 'venues';
+            } else if (req.originalUrl.includes('/auth/profile')) {
+                folder = 'users';
+            } else if (req.originalUrl.includes('/events')) {
+                folder = 'events';
+            }
+
+            const dest = `uploads/${folder}`;
+            if (!fs.existsSync(dest)) {
+                fs.mkdirSync(dest, { recursive: true });
+            }
+            cb(null, dest);
         },
         filename: (req, file, cb) => {
             const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
             const ext = path.extname(file.originalname).toLowerCase();
-            cb(null, `venue-${uniqueSuffix}${ext}`);
+            
+            let prefix = 'image';
+            if (req.query.folder) {
+                prefix = req.query.folder.replace(/s$/, ''); // e.g., 'events' -> 'event'
+            } else if (req.originalUrl.includes('/products')) {
+                prefix = 'product';
+            } else if (req.originalUrl.includes('/venues')) {
+                prefix = 'venue';
+            } else if (req.originalUrl.includes('/auth/profile')) {
+                prefix = 'user';
+            } else if (req.originalUrl.includes('/events')) {
+                prefix = 'event';
+            }
+
+            cb(null, `${prefix}-${uniqueSuffix}${ext}`);
         }
     });
 
-    console.log('📁 Using local storage for image uploads (Cloudinary not configured)');
+    console.log('📁 Using structured local storage for image uploads (Cloudinary not configured)');
 }
 
 // File filter - only allow images
@@ -72,7 +105,7 @@ const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB limit
+        fileSize: 50 * 1024 * 1024, // 50MB limit for local high-quality media
         files: 10 // Maximum 10 files per upload
     }
 });
@@ -105,9 +138,10 @@ const getImageUrl = (file) => {
     if (file.path && file.path.includes('cloudinary.com')) {
         // Cloudinary returns the full URL in file.path
         return file.path;
-    } else if (file.filename) {
-        // Local storage
-        return `/uploads/venues/${file.filename}`;
+    } else if (file.path) {
+        // Local storage - normalize backslashes to forward slashes and ensure leading slash
+        let localPath = file.path.replace(/\\/g, '/');
+        return localPath.startsWith('/') ? localPath : '/' + localPath;
     }
     return null;
 };

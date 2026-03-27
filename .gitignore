@@ -53,5 +53,4 @@ backend/prisma/migrations/.tmp/
 uploads/
 public/uploads/
 
-# Markdown files
-*.md
+

@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const bookingController = require('../controllers/booking.controller');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const { isOperator, isUser } = require('../middleware/roleCheck');
+const validate = require('../middleware/validate');
+const { createBookingRules } = require('../validators/booking.validator');
 
 /**
  * Booking Routes
@@ -16,8 +18,11 @@ const { isOperator, isUser } = require('../middleware/roleCheck');
 // GET /api/bookings/my-bookings - Get user's own bookings
 router.get('/my-bookings', auth, isUser, bookingController.getUserBookings);
 
+// GET /api/bookings/my-bookings/:id - Get user's own booking by ID
+router.get('/my-bookings/:id', auth, isUser, bookingController.getUserBookingById);
+
 // POST /api/bookings - Create new booking
-router.post('/', auth, isUser, bookingController.createBooking);
+router.post('/', auth, isUser, createBookingRules, validate, bookingController.createBooking);
 
 // PUT /api/bookings/:id/cancel - Cancel user's own booking
 router.put('/:id/cancel', auth, isUser, bookingController.cancelUserBooking);
@@ -40,5 +45,8 @@ router.put('/operator/:id/confirm', auth, isOperator, bookingController.confirmB
 
 // PUT /api/bookings/operator/:id/cancel - Cancel booking (operator)
 router.put('/operator/:id/cancel', auth, isOperator, bookingController.cancelBooking);
+
+// POST /api/bookings/operator/walk-in - Create a walk-in booking (operator)
+router.post('/operator/walk-in', auth, isOperator, bookingController.createOperatorBooking);
 
 module.exports = router;

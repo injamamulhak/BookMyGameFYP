@@ -31,13 +31,10 @@ const getVenues = async (req, res) => {
             }),
             ...(minPrice && { pricePerHour: { gte: parseFloat(minPrice) } }),
             ...(maxPrice && { pricePerHour: { lte: parseFloat(maxPrice) } }),
+            // Updated: Use single sport relation instead of many-to-many
             ...(sport && {
-                sports: {
-                    some: {
-                        sport: {
-                            name: { equals: sport, mode: 'insensitive' },
-                        },
-                    },
+                sport: {
+                    name: { equals: sport, mode: 'insensitive' },
                 },
             }),
         };
@@ -46,9 +43,8 @@ const getVenues = async (req, res) => {
             prisma.venue.findMany({
                 where,
                 include: {
-                    sports: {
-                        include: { sport: true },
-                    },
+                    // Updated: Use single sport relation
+                    sport: true,
                     images: {
                         where: { isPrimary: true },
                         take: 1,
@@ -252,31 +248,10 @@ const getOperatorVenueById = async (req, res) => {
 const createVenue = async (req, res) => {
     try {
         const operatorId = req.user.id;
-        const {
-            name,
-            description,
-            address,
-            city,
-            state,
-            postalCode,
-            latitude,
-            longitude,
-            pricePerHour,
-            contactPhone,
-            contactEmail,
-            amenities,
-            sportId, // Single sport ID (one venue = one sport)
-            operatingHours, // Array of { dayOfWeek, isClosed, openingTime, closingTime }
-            images, // Array of { imageUrl, isPrimary, displayOrder }
-        } = req.body;
-
-        // Validation
-        if (!name || !address || !pricePerHour || !sportId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Name, address, price per hour, and sport are required',
-            });
-        }
+        // Validated fields from DTO
+        const { name, address, pricePerHour, sportId, city, state, postalCode, latitude, longitude, contactPhone, contactEmail } = req.dto;
+        // Composite fields not in validator rules
+        const { description, amenities, operatingHours, images } = req.body;
 
         // Validate sport exists
         const sport = await prisma.sport.findUnique({ where: { id: sportId } });
@@ -310,8 +285,8 @@ const createVenue = async (req, res) => {
                         create: operatingHours.map(hour => ({
                             dayOfWeek: hour.dayOfWeek,
                             isClosed: hour.isClosed || false,
-                            openingTime: hour.openingTime ? new Date(`1970-01-01T${hour.openingTime}`) : null,
-                            closingTime: hour.closingTime ? new Date(`1970-01-01T${hour.closingTime}`) : null,
+                            openingTime: hour.openingTime ? new Date(`1970-01-01T${hour.openingTime}:00.000Z`) : null,
+                            closingTime: hour.closingTime ? new Date(`1970-01-01T${hour.closingTime}:00.000Z`) : null,
                         })),
                     },
                 }),
@@ -356,22 +331,10 @@ const updateVenue = async (req, res) => {
     try {
         const { id } = req.params;
         const operatorId = req.user.id;
-        const {
-            name,
-            description,
-            address,
-            city,
-            state,
-            postalCode,
-            latitude,
-            longitude,
-            pricePerHour,
-            contactPhone,
-            contactEmail,
-            amenities,
-            sportId, // Single sport ID
-            isActive,
-        } = req.body;
+        // Validated fields from DTO
+        const { name, pricePerHour, sportId, latitude, longitude, contactEmail } = req.dto;
+        // Other fields from body
+        const { description, address, city, state, postalCode, contactPhone, amenities, isActive } = req.body;
 
         // Check ownership
         const existingVenue = await prisma.venue.findFirst({
@@ -522,11 +485,19 @@ const addVenueImages = async (req, res) => {
         });
         const startOrder = (maxOrderResult._max.displayOrder || 0) + 1;
 
+        // Normalize path for consistent URLs across OS (fix Windows backslashes)
+        const normalizePath = (p) => {
+            if (!p) return null;
+            if (p.includes('cloudinary.com')) return p;
+            const normalized = p.replace(/\\/g, '/');
+            return normalized.startsWith('/') ? normalized : '/' + normalized;
+        };
+
         // Create VenueImage records for each uploaded file
         const createdImages = await prisma.venueImage.createMany({
             data: files.map((file, index) => ({
                 venueId: id,
-                imageUrl: file.path || `/uploads/venues/${file.filename}`,
+                imageUrl: normalizePath(file.path) || `/uploads/venues/${file.filename}`,
                 isPrimary: index === primaryIdx,
                 displayOrder: startOrder + index,
             })),
@@ -539,7 +510,7 @@ const addVenueImages = async (req, res) => {
                 count: createdImages.count,
                 images: files.map((file, index) => ({
                     filename: file.filename || file.originalname,
-                    url: file.path || `/uploads/venues/${file.filename}`,
+                    url: normalizePath(file.path) || `/uploads/venues/${file.filename}`,
                     isPrimary: index === primaryIdx,
                 })),
             },
@@ -625,8 +596,8 @@ const updateOperatingHours = async (req, res) => {
                     venueId: id,
                     dayOfWeek: hour.dayOfWeek,
                     isClosed: hour.isClosed || false,
-                    openingTime: hour.openingTime ? new Date(`1970-01-01T${hour.openingTime}`) : null,
-                    closingTime: hour.closingTime ? new Date(`1970-01-01T${hour.closingTime}`) : null,
+                    openingTime: hour.openingTime ? new Date(`1970-01-01T${hour.openingTime}:00.000Z`) : null,
+                    closingTime: hour.closingTime ? new Date(`1970-01-01T${hour.closingTime}:00.000Z`) : null,
                 })),
             });
         }
@@ -675,6 +646,9 @@ const getOperatorDashboard = async (req, res) => {
             confirmedBookings,
             totalRevenue,
             recentBookings,
+            totalEvents,
+            totalEventRegistrations,
+            eventRevenueAgg,
         ] = await Promise.all([
             prisma.venue.count({ where: { operatorId } }),
             prisma.venue.count({ where: { operatorId, isActive: true, approvalStatus: 'approved' } }),
@@ -705,7 +679,22 @@ const getOperatorDashboard = async (req, res) => {
                 orderBy: { createdAt: 'desc' },
                 take: 5,
             }),
+            // Event stats
+            prisma.event.count({ where: { venueId: { in: venueIds } } }),
+            prisma.eventRegistration.count({
+                where: { event: { venueId: { in: venueIds } }, paymentStatus: 'completed' },
+            }),
+            prisma.eventRegistration.findMany({
+                where: { event: { venueId: { in: venueIds } }, paymentStatus: 'completed' },
+                include: { event: { select: { registrationFee: true } } },
+            }),
         ]);
+
+        // Sum event revenue from registration fees
+        const eventRevenue = eventRevenueAgg.reduce(
+            (sum, reg) => sum + parseFloat(reg.event.registrationFee || 0),
+            0
+        );
 
         res.json({
             success: true,
@@ -718,6 +707,9 @@ const getOperatorDashboard = async (req, res) => {
                     pendingBookings,
                     confirmedBookings,
                     totalRevenue: totalRevenue._sum.totalPrice || 0,
+                    totalEvents,
+                    totalEventRegistrations,
+                    eventRevenue,
                 },
                 recentBookings,
             },
@@ -803,9 +795,12 @@ const permanentDeleteVenue = async (req, res) => {
                 where: { venueId: id },
             });
 
-            // Delete venue sports
-            await tx.venueSport.deleteMany({
-                where: { venueId: id },
+            // Delete related notifications
+            await tx.notification.deleteMany({
+                where: {
+                    relatedEntityType: 'venue',
+                    relatedEntityId: id
+                },
             });
 
             // Finally delete the venue itself

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import { formatTime } from '../../utils/timeUtils';
 
 function OperatorDashboard() {
     const [stats, setStats] = useState(null);
@@ -101,6 +102,43 @@ function OperatorDashboard() {
             bgLight: 'bg-emerald-50',
             textColor: 'text-emerald-600',
         },
+        {
+            label: 'Total Events',
+            value: stats?.totalEvents || 0,
+            icon: (
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            ),
+            color: 'bg-violet-500',
+            bgLight: 'bg-violet-50',
+            textColor: 'text-violet-600',
+            link: '/operator/events',
+        },
+        {
+            label: 'Event Registrations',
+            value: stats?.totalEventRegistrations || 0,
+            icon: (
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+            ),
+            color: 'bg-pink-500',
+            bgLight: 'bg-pink-50',
+            textColor: 'text-pink-600',
+        },
+        {
+            label: 'Event Revenue',
+            value: `Rs. ${(stats?.eventRevenue || 0).toLocaleString()}`,
+            icon: (
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                </svg>
+            ),
+            color: 'bg-teal-500',
+            bgLight: 'bg-teal-50',
+            textColor: 'text-teal-600',
+        },
     ];
 
     const getStatusBadge = (status) => {
@@ -120,15 +158,7 @@ function OperatorDashboard() {
         });
     };
 
-    const formatTime = (timeString) => {
-        if (!timeString) return '';
-        const date = new Date(timeString);
-        return date.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-        });
-    };
+
 
     if (isLoading) {
         return (
@@ -311,7 +341,7 @@ function OperatorDashboard() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(booking.status)}`}>
-                                                {booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1)}
+                                                {booking.status === 'pending' ? 'Pending Payment' : booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1)}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">

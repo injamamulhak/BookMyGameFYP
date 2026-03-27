@@ -1,10 +1,9 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import apiClient from './api';
 
 /**
  * Authentication Service
  * Handles all authentication-related API calls
+ * Uses the shared apiClient for consistent token handling and error interceptors
  */
 
 const authService = {
@@ -12,7 +11,7 @@ const authService = {
      * Register a new user
      */
     async signup(userData) {
-        const response = await axios.post(`${API_URL}/auth/signup`, userData);
+        const response = await apiClient.post('/auth/signup', userData);
         if (response.data.success && response.data.data.token) {
             localStorage.setItem('token', response.data.data.token);
         }
@@ -23,7 +22,7 @@ const authService = {
      * Login user
      */
     async login(credentials) {
-        const response = await axios.post(`${API_URL}/auth/login`, credentials);
+        const response = await apiClient.post('/auth/login', credentials);
         if (response.data.success && response.data.data.token) {
             localStorage.setItem('token', response.data.data.token);
         }
@@ -38,12 +37,7 @@ const authService = {
         if (!token) {
             throw new Error('No token found');
         }
-
-        const response = await axios.get(`${API_URL}/auth/me`, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
+        const response = await apiClient.get('/auth/me');
         return response.data;
     },
 
@@ -51,7 +45,7 @@ const authService = {
      * Verify email with token
      */
     async verifyEmail(token) {
-        const response = await axios.get(`${API_URL}/auth/verify-email/${token}`);
+        const response = await apiClient.get(`/auth/verify-email/${token}`);
         return response.data;
     },
 
@@ -59,7 +53,7 @@ const authService = {
      * Resend verification email
      */
     async resendVerification(email) {
-        const response = await axios.post(`${API_URL}/auth/resend-verification`, { email });
+        const response = await apiClient.post('/auth/resend-verification', { email });
         return response.data;
     },
 
@@ -67,7 +61,7 @@ const authService = {
      * Request password reset
      */
     async forgotPassword(email) {
-        const response = await axios.post(`${API_URL}/auth/forgot-password`, { email });
+        const response = await apiClient.post('/auth/forgot-password', { email });
         return response.data;
     },
 
@@ -75,7 +69,7 @@ const authService = {
      * Reset password with token
      */
     async resetPassword(token, newPassword) {
-        const response = await axios.post(`${API_URL}/auth/reset-password`, {
+        const response = await apiClient.post('/auth/reset-password', {
             token,
             newPassword
         });

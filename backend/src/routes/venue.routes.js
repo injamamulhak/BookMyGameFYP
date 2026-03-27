@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const venueController = require('../controllers/venue.controller');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const { isOperator } = require('../middleware/roleCheck');
 const { upload } = require('../middleware/upload');
+const validate = require('../middleware/validate');
+const { createVenueRules, updateVenueRules } = require('../validators/venue.validator');
 
 /**
  * Venue Routes
@@ -24,13 +26,13 @@ router.get('/operator/dashboard', auth, isOperator, venueController.getOperatorD
 router.get('/operator/my-venues', auth, isOperator, venueController.getOperatorVenues);
 
 // POST /api/venues/operator/my-venues - Create new venue
-router.post('/operator/my-venues', auth, isOperator, venueController.createVenue);
+router.post('/operator/my-venues', auth, isOperator, createVenueRules, validate, venueController.createVenue);
 
 // GET /api/venues/operator/my-venues/:id - Get operator's venue by ID
 router.get('/operator/my-venues/:id', auth, isOperator, venueController.getOperatorVenueById);
 
 // PUT /api/venues/operator/my-venues/:id - Update venue
-router.put('/operator/my-venues/:id', auth, isOperator, venueController.updateVenue);
+router.put('/operator/my-venues/:id', auth, isOperator, updateVenueRules, validate, venueController.updateVenue);
 
 // DELETE /api/venues/operator/my-venues/:id - Deactivate venue (soft delete)
 router.delete('/operator/my-venues/:id', auth, isOperator, venueController.deleteVenue);

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { formatTime } from '../../utils/timeUtils';
 
 function VenueApproval() {
     const { id } = useParams();
@@ -12,9 +13,13 @@ function VenueApproval() {
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
     const [selectedImage, setSelectedImage] = useState(0);
+    const hasFetched = useRef(false);
 
     useEffect(() => {
         const fetchVenue = async () => {
+            // Prevent duplicate API calls
+            if (hasFetched.current) return;
+            hasFetched.current = true;
             try {
                 setIsLoading(true);
                 const response = await api.get(`/admin/venues/${id}`);
@@ -74,11 +79,7 @@ function VenueApproval() {
 
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-    const formatTime = (timeStr) => {
-        if (!timeStr) return 'N/A';
-        const date = new Date(timeStr);
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    };
+
 
     if (isLoading) {
         return (
@@ -302,8 +303,8 @@ function VenueApproval() {
                             <div>
                                 <p className="text-gray-500 text-sm">Status</p>
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${venue.approvalStatus === 'approved' ? 'bg-green-100 text-green-700' :
-                                        venue.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700' :
-                                            'bg-amber-100 text-amber-700'
+                                    venue.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700' :
+                                        'bg-amber-100 text-amber-700'
                                     }`}>
                                     {venue.approvalStatus.charAt(0).toUpperCase() + venue.approvalStatus.slice(1)}
                                 </span>

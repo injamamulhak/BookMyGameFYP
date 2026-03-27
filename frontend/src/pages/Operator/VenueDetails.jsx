@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { formatTime } from '../../utils/timeUtils';
 
 function VenueDetails() {
     const { id } = useParams();
@@ -9,6 +10,7 @@ function VenueDetails() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
+    const [selectedImage, setSelectedImage] = useState(null);
 
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -21,7 +23,12 @@ function VenueDetails() {
             setIsLoading(true);
             const response = await api.get(`/venues/operator/my-venues/${id}`);
             if (response.data.success) {
-                setVenue(response.data.data);
+                const venueData = response.data.data;
+                setVenue(venueData);
+                if (venueData.images?.length > 0) {
+                    const primary = venueData.images.find(img => img.isPrimary) || venueData.images[0];
+                    setSelectedImage(primary);
+                }
             }
         } catch (err) {
             console.error('Error fetching venue:', err);
@@ -47,34 +54,6 @@ function VenueDetails() {
         }
     };
 
-    const formatTime = (timeString) => {
-        if (!timeString) return 'N/A';
-        const date = new Date(timeString);
-        return date.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-        });
-    };
-
-    const handleGenerateSlots = async () => {
-        const startDate = prompt('Enter start date (YYYY-MM-DD):');
-        const endDate = prompt('Enter end date (YYYY-MM-DD):');
-
-        if (!startDate || !endDate) return;
-
-        try {
-            const response = await api.post(`/timeslots/operator/venue/${id}/generate`, {
-                startDate,
-                endDate,
-                slotDurationMinutes: 60,
-            });
-            alert(`Successfully generated ${response.data.created} time slots!`);
-        } catch (err) {
-            console.error('Error generating slots:', err);
-            alert(err.response?.data?.message || 'Failed to generate time slots');
-        }
-    };
 
     if (isLoading) {
         return (
@@ -96,7 +75,6 @@ function VenueDetails() {
     }
 
     const status = getStatusBadge();
-    const primaryImage = venue?.images?.find((img) => img.isPrimary) || venue?.images?.[0];
 
     return (
         <div className="space-y-6">
@@ -123,12 +101,6 @@ function VenueDetails() {
                 </div>
 
                 <div className="flex items-center space-x-3">
-                    <button
-                        onClick={handleGenerateSlots}
-                        className="px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors"
-                    >
-                        Generate Time Slots
-                    </button>
                     <Link
                         to={`/operator/venues/${id}/edit`}
                         className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
@@ -141,9 +113,9 @@ function VenueDetails() {
             {/* Hero Image */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 <div className="aspect-video bg-gray-100 relative">
-                    {primaryImage ? (
+                    {selectedImage ? (
                         <img
-                            src={primaryImage.imageUrl}
+                            src={selectedImage.imageUrl}
                             alt={venue?.name}
                             className="w-full h-full object-cover"
                         />
@@ -168,7 +140,12 @@ function VenueDetails() {
                                     key={image.id || index}
                                     src={image.imageUrl}
                                     alt={`${venue.name} ${index + 1}`}
-                                    className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+                                    onClick={() => setSelectedImage(image)}
+                                    className={`w-20 h-20 rounded-lg object-cover flex-shrink-0 cursor-pointer transition-all ${
+                                        selectedImage?.id === image.id 
+                                        ? 'ring-2 ring-primary-600 opacity-100' 
+                                        : 'opacity-60 hover:opacity-100 ring-1 ring-gray-200'
+                                    }`}
                                 />
                             ))}
                         </div>
@@ -183,7 +160,6 @@ function VenueDetails() {
                         {[
                             { key: 'overview', label: 'Overview' },
                             { key: 'schedule', label: 'Schedule' },
-                            { key: 'bookings', label: 'Recent Bookings' },
                         ].map((tab) => (
                             <button
                                 key={tab.key}
@@ -255,7 +231,6 @@ function VenueDetails() {
                                         </p>
                                     </div>
                                 </div>
-                                {/* Map Link */}
                                 {venue?.latitude && venue?.longitude && (
                                     <a
                                         href={`https://www.google.com/maps?q=${venue.latitude},${venue.longitude}`}
@@ -346,22 +321,6 @@ function VenueDetails() {
                                     </div>
                                 ))}
                             </div>
-                        </div>
-                    )}
-
-                    {/* Bookings Tab */}
-                    {activeTab === 'bookings' && (
-                        <div className="text-center py-8">
-                            <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <p className="text-gray-500">No recent bookings for this venue.</p>
-                            <Link
-                                to="/operator/bookings"
-                                className="text-primary-600 hover:text-primary-700 font-medium mt-2 inline-block"
-                            >
-                                View All Bookings →
-                            </Link>
                         </div>
                     )}
                 </div>

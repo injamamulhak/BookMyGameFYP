@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import { useDebounce } from '../../hooks/useDebounce';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
+import EmptyState from '../../components/common/EmptyState';
+import StatusBadge from '../../components/common/StatusBadge';
 
 function AllVenues() {
     const [venues, setVenues] = useState([]);
@@ -8,6 +12,7 @@ function AllVenues() {
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all'); // all, pending, approved, rejected
     const [searchQuery, setSearchQuery] = useState('');
+    const debouncedSearch = useDebounce(searchQuery, 300);
 
     const fetchVenues = async () => {
         try {
@@ -31,32 +36,12 @@ function AllVenues() {
 
     useEffect(() => {
         fetchVenues();
-    }, [filter]);
+    }, [filter, debouncedSearch]);
 
-    // Debounce search
-    useEffect(() => {
-        const timeoutId = setTimeout(fetchVenues, 300);
-        return () => clearTimeout(timeoutId);
-    }, [searchQuery]);
 
-    const getStatusBadge = (status) => {
-        switch (status) {
-            case 'approved':
-                return <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">Approved</span>;
-            case 'rejected':
-                return <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">Rejected</span>;
-            case 'pending':
-            default:
-                return <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Pending</span>;
-        }
-    };
 
     if (isLoading && venues.length === 0) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600"></div>
-            </div>
-        );
+        return <LoadingSpinner />;
     }
 
     return (
@@ -106,7 +91,7 @@ function AllVenues() {
                     <button onClick={fetchVenues} className="mt-4 btn-primary">Retry</button>
                 </div>
             ) : venues.length > 0 ? (
-                <div className="bg-white rounded-xl shadow-soft overflow-hidden">
+                <div className="bg-white rounded-xl shadow-soft overflow-x-auto">
                     <table className="w-full">
                         <thead className="bg-gray-50">
                             <tr>
@@ -153,7 +138,7 @@ function AllVenues() {
                                         <p className="text-sm text-gray-500">{venue.operator?.email}</p>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {getStatusBadge(venue.approvalStatus)}
+                                        <StatusBadge status={venue.approvalStatus} />
                                     </td>
                                     <td className="px-6 py-4">
                                         <Link
@@ -169,19 +154,11 @@ function AllVenues() {
                     </table>
                 </div>
             ) : (
-                <div className="bg-white rounded-xl shadow-soft p-12 text-center">
-                    <div className="flex justify-center mb-4">
-                        <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                        </svg>
-                    </div>
-                    <h3 className="font-heading font-bold text-xl text-gray-900 mb-2">
-                        No venues found
-                    </h3>
-                    <p className="text-gray-500">
-                        {filter !== 'all' ? `No ${filter} venues at the moment.` : 'No venues have been submitted yet.'}
-                    </p>
-                </div>
+                <EmptyState
+                    icon="venue"
+                    title="No venues found"
+                    message={filter !== 'all' ? `No ${filter} venues at the moment.` : 'No venues have been submitted yet.'}
+                />
             )}
         </div>
     );

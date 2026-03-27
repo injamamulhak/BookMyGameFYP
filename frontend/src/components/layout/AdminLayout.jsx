@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import logo from '../../assets/logo.png';
 
 function AdminLayout() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     const handleLogout = () => {
         logout();
@@ -13,6 +14,15 @@ function AdminLayout() {
     };
 
     const navItems = [
+        {
+            name: 'Home',
+            path: '/',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+            ),
+        },
         {
             name: 'Dashboard',
             path: '/admin',
@@ -49,6 +59,33 @@ function AdminLayout() {
                 </svg>
             ),
         },
+        {
+            name: 'Products',
+            path: '/admin/products',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+            ),
+        },
+        {
+            name: 'Seller Requests',
+            path: '/admin/seller-requests',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+            ),
+        },
+        {
+            name: 'Training Videos',
+            path: '/admin/training',
+            icon: (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.868v6.264a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                </svg>
+            ),
+        },
     ];
 
     return (
@@ -58,14 +95,21 @@ function AdminLayout() {
                 <div className="h-full w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col">
                     {/* Logo */}
                     <div className="h-16 flex items-center justify-between px-5 border-b border-gray-700">
-                        <Link to="/" className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">BG</span>
-                            </div>
+                        <div className="flex items-center gap-3">
+                            <img src={logo} alt="BookMyGame" className="h-10 w-auto brightness-0 invert" />
                             <span className="font-heading font-bold text-lg text-white">
                                 Admin Panel
                             </span>
-                        </Link>
+                        </div>
+                        {/* Close button for mobile */}
+                        <button
+                            onClick={() => setSidebarOpen(false)}
+                            className="md:hidden text-gray-400 hover:text-white transition-colors"
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
                     </div>
 
                     {/* Navigation */}
@@ -122,22 +166,42 @@ function AdminLayout() {
                 </div>
             </aside>
 
-            {/* Mobile sidebar toggle */}
-            <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="fixed bottom-4 right-4 z-50 md:hidden bg-red-600 text-white p-3 rounded-full shadow-lg"
-            >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-            </button>
+            {/* Backdrop overlay for mobile */}
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-30 md:hidden"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
 
             {/* Main Content */}
-            <main className="md:ml-64 min-h-screen">
+            <div className="md:ml-64 min-h-screen">
+                {/* Mobile header bar */}
+                <header className="md:hidden h-14 bg-white shadow-sm flex items-center justify-between px-4 sticky top-0 z-20">
+                    <button
+                        onClick={() => setSidebarOpen(true)}
+                        className="p-2 text-gray-600 hover:text-gray-900"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+
+                    <Link
+                        to="/"
+                        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        <span className="text-sm font-medium">Back to Home</span>
+                    </Link>
+                </header>
+
                 <div className="p-6">
                     <Outlet />
                 </div>
-            </main>
+            </div>
         </div>
     );
 }

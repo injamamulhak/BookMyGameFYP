@@ -2,8 +2,8 @@ import axios from 'axios';
 
 // Create axios instance with base configuration
 const apiClient = axios.create({
-    baseURL: import.meta.env.REACT_APP_API_URL || 'http://localhost:5000/api',
-    timeout: 10000,
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+    timeout: 30000, // Increased to 30 seconds to support larger file uploads
     headers: {
         'Content-Type': 'application/json',
     },
@@ -28,9 +28,17 @@ apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Unauthorized - clear token and redirect to login
-            localStorage.removeItem('token');
-            window.location.href = '/login';
+            const requestUrl = error.config?.url || '';
+            // Don't redirect for auth endpoints — 401 there means wrong credentials, not expired session
+            const isAuthRoute = requestUrl.includes('/auth/login') ||
+                requestUrl.includes('/auth/signup') ||
+                requestUrl.includes('/auth/forgot-password') ||
+                requestUrl.includes('/auth/reset-password');
+
+            if (!isAuthRoute) {
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }

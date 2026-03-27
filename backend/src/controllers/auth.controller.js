@@ -11,35 +11,10 @@ const authService = require('../services/auth.service');
  */
 const signup = async (req, res) => {
     try {
-        const { email, password, fullName, phone, role } = req.body;
-
-        // Validation
-        if (!email || !password || !fullName) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email, password, and full name are required',
-            });
-        }
-
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid email format',
-            });
-        }
-
-        // Validate password strength
-        if (password.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: 'Password must be at least 6 characters long',
-            });
-        }
+        const { email, password, fullName, phone, role } = req.dto;
 
         // Register user
-        const { user, token } = await authService.register({
+        const { user } = await authService.register({
             email,
             password,
             fullName,
@@ -52,7 +27,6 @@ const signup = async (req, res) => {
             message: 'User registered successfully. Please check your email to verify your account.',
             data: {
                 user,
-                token,
             },
         });
     } catch (error) {
@@ -79,15 +53,7 @@ const signup = async (req, res) => {
  */
 const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
-
-        // Validation
-        if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email and password are required',
-            });
-        }
+        const { email, password } = req.dto;
 
         // Attempt login
         const { user, token } = await authService.login(email, password);
@@ -144,22 +110,7 @@ const getCurrentUser = async (req, res) => {
  */
 const updatePassword = async (req, res) => {
     try {
-        const { oldPassword, newPassword } = req.body;
-
-        // Validation
-        if (!oldPassword || !newPassword) {
-            return res.status(400).json({
-                success: false,
-                message: 'Old password and new password are required',
-            });
-        }
-
-        if (newPassword.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: 'New password must be at least 6 characters long',
-            });
-        }
+        const { oldPassword, newPassword } = req.dto;
 
         await authService.updatePassword(req.user.id, oldPassword, newPassword);
 
@@ -190,20 +141,13 @@ const updatePassword = async (req, res) => {
  */
 const updateProfile = async (req, res) => {
     try {
-        const { fullName, phone, profileImage } = req.body;
+        const { fullName, phone } = req.dto;
+        const { profileImage } = req.body; // profileImage is not in validator rules
         const userId = req.user.id;
 
-        // Validation
-        if (!fullName || fullName.trim().length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Full name is required',
-            });
-        }
-
         const updatedUser = await authService.updateProfile(userId, {
-            fullName: fullName.trim(),
-            phone: phone?.trim() || null,
+            fullName,
+            phone: phone || null,
             profileImage: profileImage || null,
         });
 
@@ -328,14 +272,7 @@ const verifyEmail = async (req, res) => {
  */
 const resendVerification = async (req, res) => {
     try {
-        const { email } = req.body;
-
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email is required',
-            });
-        }
+        const { email } = req.dto;
 
         const result = await authService.resendVerification(email);
 
@@ -375,14 +312,7 @@ const resendVerification = async (req, res) => {
  */
 const forgotPassword = async (req, res) => {
     try {
-        const { email } = req.body;
-
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email is required',
-            });
-        }
+        const { email } = req.dto;
 
         const result = await authService.forgotPassword(email);
 
@@ -407,21 +337,7 @@ const forgotPassword = async (req, res) => {
  */
 const resetPassword = async (req, res) => {
     try {
-        const { token, newPassword } = req.body;
-
-        if (!token || !newPassword) {
-            return res.status(400).json({
-                success: false,
-                message: 'Token and new password are required',
-            });
-        }
-
-        if (newPassword.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: 'Password must be at least 6 characters long',
-            });
-        }
+        const { token, newPassword } = req.dto;
 
         const result = await authService.resetPassword(token, newPassword);
 

@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { useDebounce } from '../../hooks/useDebounce';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
+import EmptyState from '../../components/common/EmptyState';
+import Pagination from '../../components/common/Pagination';
+import StatusBadge from '../../components/common/StatusBadge';
 
 function UserManagement() {
     const [users, setUsers] = useState([]);
@@ -19,14 +24,12 @@ function UserManagement() {
         fetchUsers();
     }, [pagination.page, filters.role, filters.search]);
 
-    // Debounced search
+    const debouncedSearch = useDebounce(searchInput.trim(), 800);
+
     useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            setFilters(prev => ({ ...prev, search: searchInput }));
-            setPagination(prev => ({ ...prev, page: 1 }));
-        }, 300);
-        return () => clearTimeout(timeoutId);
-    }, [searchInput]);
+        setFilters(prev => ({ ...prev, search: debouncedSearch }));
+        setPagination(prev => ({ ...prev, page: 1 }));
+    }, [debouncedSearch]);
 
     const showMessage = (type, text) => {
         setMessage({ type, text });
@@ -103,14 +106,7 @@ function UserManagement() {
         }
     };
 
-    const getRoleBadge = (role) => {
-        const badges = {
-            admin: 'bg-red-100 text-red-800',
-            operator: 'bg-purple-100 text-purple-800',
-            user: 'bg-blue-100 text-blue-800',
-        };
-        return badges[role] || 'bg-gray-100 text-gray-800';
-    };
+
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-US', {
@@ -197,23 +193,13 @@ function UserManagement() {
             {/* Users Table */}
             <div className="bg-white rounded-xl shadow-soft overflow-hidden">
                 {isLoading ? (
-                    <div className="flex items-center justify-center h-64">
-                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-600"></div>
-                    </div>
+                    <LoadingSpinner />
                 ) : users.length === 0 ? (
-                    <div className="p-12 text-center">
-                        <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <h3 className="font-heading font-bold text-xl text-gray-900 mb-2">
-                            No users found
-                        </h3>
-                        <p className="text-gray-500">
-                            {filters.search || filters.role
-                                ? 'Try adjusting your filters'
-                                : 'No users registered yet'}
-                        </p>
-                    </div>
+                    <EmptyState
+                        icon="user"
+                        title="No users found"
+                        message={filters.search || filters.role ? 'Try adjusting your filters' : 'No users registered yet'}
+                    />
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
@@ -256,9 +242,7 @@ function UserManagement() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full capitalize ${getRoleBadge(user.role)}`}>
-                                                {user.role}
-                                            </span>
+                                            <StatusBadge status={user.role} />
                                         </td>
                                         <td className="px-6 py-4">
                                             {user.isVerified ? (
@@ -326,22 +310,11 @@ function UserManagement() {
                             {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
                             {pagination.total} users
                         </p>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                                disabled={pagination.page === 1}
-                                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Previous
-                            </button>
-                            <button
-                                onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                                disabled={pagination.page === pagination.pages}
-                                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Next
-                            </button>
-                        </div>
+                        <Pagination
+                            currentPage={pagination.page}
+                            totalPages={pagination.pages}
+                            onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                        />
                     </div>
                 )}
             </div>

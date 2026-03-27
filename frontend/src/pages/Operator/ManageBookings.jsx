@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import { formatTime } from '../../utils/timeUtils';
 
 /**
  * ManageBookings - Operator's booking management page
@@ -150,14 +151,7 @@ function ManageBookings() {
         });
     };
 
-    const formatTime = (timeString) => {
-        if (!timeString) return '-';
-        return new Date(timeString).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-        });
-    };
+
 
     // Filter bookings by search term (client-side)
     const filteredBookings = bookings.filter(booking => {
@@ -381,7 +375,7 @@ function ManageBookings() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full border ${getStatusBadge(booking.status)}`}>
-                                                    {booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1)}
+                                                    {booking.status === 'pending' ? 'Pending Payment' : booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1)}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
@@ -401,30 +395,7 @@ function ManageBookings() {
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                                         </svg>
                                                     </Link>
-                                                    {booking.status === 'pending' && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleConfirmBooking(booking.id)}
-                                                                disabled={actionLoading === booking.id}
-                                                                className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
-                                                                title="Confirm Booking"
-                                                            >
-                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                                </svg>
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleCancelBooking(booking.id)}
-                                                                disabled={actionLoading === booking.id}
-                                                                className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                                                                title="Cancel Booking"
-                                                            >
-                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                                </svg>
-                                                            </button>
-                                                        </>
-                                                    )}
+                                                    {/* We do not show Confirm/Cancel buttons for pending bookings as they are awaiting automatic payment confirmation */}
                                                 </div>
                                             </td>
                                         </tr>
@@ -450,7 +421,7 @@ function ManageBookings() {
                                             </div>
                                         </div>
                                         <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full border ${getStatusBadge(booking.status)}`}>
-                                            {booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1)}
+                                            {booking.status === 'pending' ? 'Pending Payment' : booking.status?.charAt(0).toUpperCase() + booking.status?.slice(1)}
                                         </span>
                                     </div>
 
@@ -480,24 +451,6 @@ function ManageBookings() {
                                         >
                                             View
                                         </Link>
-                                        {booking.status === 'pending' && (
-                                            <>
-                                                <button
-                                                    onClick={() => handleConfirmBooking(booking.id)}
-                                                    disabled={actionLoading === booking.id}
-                                                    className="px-3 py-1.5 text-sm text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
-                                                >
-                                                    Confirm
-                                                </button>
-                                                <button
-                                                    onClick={() => handleCancelBooking(booking.id)}
-                                                    disabled={actionLoading === booking.id}
-                                                    className="px-3 py-1.5 text-sm text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </>
-                                        )}
                                     </div>
                                 </div>
                             ))}
