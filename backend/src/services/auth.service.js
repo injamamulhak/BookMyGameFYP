@@ -58,7 +58,7 @@ class AuthService {
     }
 
     // Validate role
-    const validRoles = ['user', 'venue_owner', 'admin']
+    const validRoles = ['user', 'operator', 'admin']
     if (!validRoles.includes(role)) {
       throw new Error('Invalid role specified')
     }
@@ -92,10 +92,16 @@ class AuthService {
       },
     })
 
-    // Send verification email (non-blocking)
+    // Send verification email (non-blocking - don't fail signup if email fails)
     emailService
       .sendVerificationEmail(email, fullName, verificationToken)
-      .catch((err) => console.error('Failed to send verification email:', err))
+      .catch((err) => {
+        console.error(
+          '⚠️  Failed to send verification email for user:',
+          email,
+          err.message,
+        )
+      })
 
     return { user }
   }
@@ -116,7 +122,7 @@ class AuthService {
     // Verify password
     const isPasswordValid = await this.comparePassword(
       password,
-      user.passwordHash
+      user.passwordHash,
     )
 
     if (!isPasswordValid) {
@@ -249,7 +255,7 @@ class AuthService {
     await emailService.sendVerificationEmail(
       email,
       user.fullName,
-      verificationToken
+      verificationToken,
     )
 
     return { message: 'Verification email sent successfully' }
@@ -270,7 +276,7 @@ class AuthService {
     // Verify old password
     const isPasswordValid = await this.comparePassword(
       oldPassword,
-      user.passwordHash
+      user.passwordHash,
     )
 
     if (!isPasswordValid) {
@@ -321,7 +327,7 @@ class AuthService {
 
   /**
    * Request password reset
-   * Silent response - doesn't reveal if email exists (security best practice)
+   * Throws error if email fails to send
    */
   async forgotPassword(email) {
     // Silent response message
@@ -333,6 +339,7 @@ class AuthService {
     })
 
     // Always return same message (prevent user enumeration)
+    // But only attempt to send email if user exists
     if (!user) {
       return { message: silentMessage }
     }
@@ -350,8 +357,27 @@ class AuthService {
       },
     })
 
-    // Send password reset email
-    await emailService.sendPasswordResetEmail(email, user.fullName, resetToken)
+    // Send password reset email - this will throw if it fails
+    try {
+      await emailService.sendPasswordResetEmail(
+        email,
+        user.fullName,
+        resetToken,
+      )
+    } catch (emailError) {
+      // Revert the reset token if email fails
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          resetToken: null,
+          resetTokenExpiry: null,
+        },
+      })
+      // Re-throw the error so the caller knows the operation failed
+      throw new Error(
+        `Could not send password reset email: ${emailError.message}`,
+      )
+    }
 
     return { message: silentMessage }
   }

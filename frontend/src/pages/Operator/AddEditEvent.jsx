@@ -194,6 +194,47 @@ function AddEditEvent() {
   // Merged view of all "active" slots for this event (locked originals + newly selected)
   const allEventSlots = [...lockedEventSlots, ...formData.selectedSlots]
 
+  // Calculate the max datetime for registration deadline based on event start
+  const getMaxDeadlineValue = () => {
+    if (allEventSlots.length === 0) {
+      // If no slots selected, allow any future datetime
+      return new Date().toISOString().slice(0, 16)
+    }
+
+    // Calculate event start date/time
+    const dates = allEventSlots.map((s) => s.date).sort()
+    const startDate = dates[0]
+
+    const firstDateSlots = allEventSlots.filter(s => s.date === startDate)
+
+    const timeToMins = (t) => {
+      const [h, m] = t.split(':').map(Number)
+      return h * 60 + m
+    }
+
+    const startMins = Math.min(
+      ...firstDateSlots.map((s) => timeToMins(s.startTime)),
+    )
+
+    const h = Math.floor(startMins / 60)
+    const m = startMins % 60
+    const startTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+
+    // Create a date string just before the event start (subtract 1 minute to allow deadline to be set right before event)
+    const eventStartDT = new Date(`${startDate}T${startTime}`)
+    // Subtract 1 minute to set max as one minute before event start
+    eventStartDT.setMinutes(eventStartDT.getMinutes() - 1)
+
+    // Format for datetime-local input (YYYY-MM-DDTHH:mm)
+    const year = eventStartDT.getFullYear()
+    const month = String(eventStartDT.getMonth() + 1).padStart(2, '0')
+    const day = String(eventStartDT.getDate()).padStart(2, '0')
+    const hours = String(eventStartDT.getHours()).padStart(2, '0')
+    const minutes = String(eventStartDT.getMinutes()).padStart(2, '0')
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+
   const handleSlotClick = (slot, dateStr, meta) => {
     if (meta?.isThisEventSlot) {
       // Operator clicked a locked "This Event" slot – remove it from the locked set
@@ -247,15 +288,6 @@ function AddEditEvent() {
       return
     }
 
-    // Validate registration deadline if provided
-    if (formData.registrationDeadline) {
-      const deadline = new Date(formData.registrationDeadline)
-      if (deadline < new Date()) {
-        setError('Registration deadline cannot be in the past')
-        return
-      }
-    }
-
     // Calculate bounding dates and times from MERGED slot set
     const dates = allEventSlots.map((s) => s.date).sort()
     const startDate = dates[0]
@@ -271,6 +303,13 @@ function AddEditEvent() {
       return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
     }
 
+    // start time for the first date
+    const firstDateSlots = allEventSlots.filter((s) => s.date === startDate)
+    const actualStartMins = Math.min(
+      ...firstDateSlots.map((s) => timeToMins(s.startTime)),
+    )
+    const eventActualStartTime = minsToTime(actualStartMins)
+
     const startMins = Math.min(
       ...allEventSlots.map((s) => timeToMins(s.startTime)),
     )
@@ -278,6 +317,26 @@ function AddEditEvent() {
 
     const startTime = minsToTime(startMins)
     const endTime = minsToTime(endMins)
+
+    // Validate registration deadline if provided
+    if (formData.registrationDeadline) {
+      const deadline = new Date(formData.registrationDeadline)
+
+      // Create event start datetime (first slot date + earliest start time on that date)
+      const eventStartDateTime = new Date(`${startDate}T${eventActualStartTime}`)
+
+      if (deadline < new Date()) {
+        setError('Registration deadline cannot be in the past')
+        return
+      }
+
+      if (deadline >= eventStartDateTime) {
+        setError(
+          'Registration deadline must be before the event start date and time',
+        )
+        return
+      }
+    }
 
     try {
       setSaving(true)
@@ -576,24 +635,32 @@ function AddEditEvent() {
                         </div>
                       </div>
                       {/* Per-date breakdown */}
-                      <div className='flex flex-wrap gap-2'>
-                        {dates.map((date) => {
-                          const daySlots = allEventSlots.filter(
-                            (s) => s.date === date,
-                          )
-                          return (
-                            <span
-                              key={date}
-                              className='inline-flex items-center gap-1 px-2 py-1 bg-white border border-primary-200 rounded-lg text-xs text-primary-700'
-                            >
-                              📅 {date}{' '}
-                              <span className='font-semibold'>
-                                ({daySlots.length} slot
-                                {daySlots.length !== 1 ? 's' : ''})
-                              </span>
-                            </span>
-                          )
-                        })}
+                      <div className='flex flex-col gap-2 mt-4 border-t border-primary-200 pt-3'>
+                        <span className='text-sm font-semibold text-primary-800'>Detailed Slots:</span>
+                        <div className='grid grid-cols-1 md:grid-cols-2 gap-2'>
+                          {dates.map((date) => {
+                            const daySlots = allEventSlots.filter(
+                              (s) => s.date === date,
+                            )
+                            // sort by start time
+                            daySlots.sort((a, b) => tm(a.startTime) - tm(b.startTime))
+                            return (
+                              <div
+                                key={date}
+                                className='p-2 bg-white border border-primary-200 rounded-lg text-xs text-primary-700 block'
+                              >
+                                <div className='font-bold border-b border-primary-100 pb-1 mb-1'>📅 {date}</div>
+                                <div className='flex flex-wrap gap-1'>
+                                  {daySlots.map((slot, idx) => (
+                                    <span key={idx} className='bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100'>
+                                      {fmt12(tm(slot.startTime))} - {fmt12(tm(slot.endTime))}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
                   )
@@ -647,10 +714,11 @@ function AddEditEvent() {
                 value={formData.registrationDeadline}
                 onChange={handleChange}
                 min={new Date().toISOString().slice(0, 16)}
+                max={getMaxDeadlineValue()}
                 className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none'
               />
               <p className='text-xs text-gray-500 mt-1'>
-                Must be in the future
+                Must be before event start time
               </p>
             </div>
           </div>

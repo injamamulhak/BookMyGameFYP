@@ -10,6 +10,7 @@ function PaymentCallback() {
     const [status, setStatus] = useState('verifying'); // verifying, success, failed
     const [message, setMessage] = useState('Verifying your payment...');
     const [paymentData, setPaymentData] = useState(null);
+    const [showDetails, setShowDetails] = useState(false);
 
     // Detect whether this is an event registration payment
     const paymentType = searchParams.get('type'); // 'event' | null (venue booking)
@@ -29,12 +30,6 @@ function PaymentCallback() {
                     return;
                 }
 
-                // Check if payment was cancelled on Khalti side
-                if (khaltiStatus === 'Canceled' || khaltiStatus === 'User canceled') {
-                    // We don't return early here. We want the backend API to be called
-                    // so it can clean up any pending bookings or event registrations.
-                }
-
                 // Verify payment with backend
                 const response = await api.get('/payments/khalti/verify', {
                     params: { pidx, transaction_id: txnId, status: khaltiStatus, purchase_order_id: purchaseOrderId }
@@ -52,19 +47,20 @@ function PaymentCallback() {
                     // Clear cart from localStorage
                     localStorage.removeItem('bookingCart');
                     sessionStorage.removeItem('pendingBooking');
-                } else if (response.data.data?.status === 'pending') {
-                    setStatus('verifying');
-                    setMessage('Payment is being processed. Please wait...');
-                    // Retry after 3 seconds
-                    setTimeout(verifyPayment, 3000);
                 } else {
+                    // Both 'pending' (Khalti server issue) and 'failed' are treated as failed.
+                    // The backend has already cleaned up any pending bookings/registrations.
                     setStatus('failed');
-                    setMessage(response.data.message || 'Payment verification failed.');
+                    setMessage(response.data.message || 'Payment could not be completed. Any pending booking has been cancelled.');
                 }
             } catch (error) {
                 console.error('Payment verification error:', error);
+                // Even on network error, backend attempted cleanup of pending records.
                 setStatus('failed');
-                setMessage(error.response?.data?.message || 'Failed to verify payment. Please contact support.');
+                setMessage(
+                    error.response?.data?.message ||
+                    'Payment verification failed. Any pending booking has been cancelled. Please try again.'
+                );
             }
         };
 
@@ -76,7 +72,7 @@ function PaymentCallback() {
             <Header />
 
             <main className="container-custom py-16">
-                <div className="max-w-md mx-auto bg-white rounded-xl p-8 shadow-soft text-center">
+                <div className="max-w-lg mx-auto bg-white rounded-xl p-8 shadow-soft text-center">
                     {status === 'verifying' && (
                         <>
                             <div className="animate-spin w-16 h-16 border-4 border-primary-600 border-t-transparent rounded-full mx-auto mb-6"></div>
@@ -95,11 +91,31 @@ function PaymentCallback() {
                             <h1 className="text-2xl font-bold text-green-600 mb-2">Payment Successful!</h1>
                             <p className="text-gray-600 mb-6">{message}</p>
 
-                            {paymentData?.transactionId && (
-                                <p className="text-sm text-gray-500 mb-4">
-                                    Transaction ID: <span className="font-mono">{paymentData.transactionId}</span>
-                                </p>
-                            )}
+                            {/* Payment Details Panel */}
+                            <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+                                <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Payment Details</h2>
+                                <div className="space-y-2">
+                                    {paymentData?.transactionId && (
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500">Transaction ID</span>
+                                            <span className="font-mono text-gray-800 text-xs break-all max-w-[180px] text-right">{paymentData.transactionId}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-500">Payment Method</span>
+                                        <span className="font-medium text-gray-800">Khalti</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-500">Status</span>
+                                        <span className="font-medium text-green-600">✓ Completed</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-500">Type</span>
+                                        <span className="font-medium text-gray-800">{paymentType === 'event' ? 'Event Registration' : 'Venue Booking'}</span>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-3">📧 A receipt has been sent to your email.</p>
+                            </div>
 
                             <div className="space-y-3">
                                 {paymentType === 'event' ? (
@@ -108,7 +124,7 @@ function PaymentCallback() {
                                             to="/my-registrations"
                                             className="block w-full py-3 rounded-lg font-semibold btn-primary"
                                         >
-                                            View My Events
+                                            View Payment Details
                                         </Link>
                                         <Link
                                             to="/events"
@@ -123,7 +139,7 @@ function PaymentCallback() {
                                             to="/my-bookings"
                                             className="block w-full py-3 rounded-lg font-semibold btn-primary"
                                         >
-                                            View My Bookings
+                                            View Payment Details
                                         </Link>
                                         <Link
                                             to="/venues"
@@ -145,21 +161,41 @@ function PaymentCallback() {
                                 </svg>
                             </div>
                             <h1 className="text-2xl font-bold text-red-600 mb-2">Payment Failed</h1>
-                            <p className="text-gray-600 mb-6">{message}</p>
+                            <p className="text-gray-600 mb-2">{message}</p>
+                            <p className="text-sm text-gray-400 mb-6">No charges have been made. Your slot is now available again.</p>
 
                             <div className="space-y-3">
-                                <button
-                                    onClick={() => navigate(-1)}
-                                    className="block w-full py-3 rounded-lg font-semibold btn-primary"
-                                >
-                                    Try Again
-                                </button>
-                                <Link
-                                    to="/venues"
-                                    className="block w-full py-3 text-gray-600 hover:text-gray-900 transition-colors"
-                                >
-                                    Back to Venues
-                                </Link>
+                                {paymentType === 'event' ? (
+                                    <>
+                                        <Link
+                                            to="/events"
+                                            className="block w-full py-3 rounded-lg font-semibold btn-primary"
+                                        >
+                                            Browse Events
+                                        </Link>
+                                        <button
+                                            onClick={() => navigate(-1)}
+                                            className="block w-full py-3 text-gray-600 hover:text-gray-900 transition-colors"
+                                        >
+                                            Try Again
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Link
+                                            to="/venues"
+                                            className="block w-full py-3 rounded-lg font-semibold btn-primary"
+                                        >
+                                            Browse Venues
+                                        </Link>
+                                        <button
+                                            onClick={() => navigate(-1)}
+                                            className="block w-full py-3 text-gray-600 hover:text-gray-900 transition-colors"
+                                        >
+                                            Try Again
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </>
                     )}

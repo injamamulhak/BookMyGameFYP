@@ -24,7 +24,16 @@ router.post('/', auth, createReviewRules, validate, reviewController.createRevie
 // PUT /api/reviews/:id - Update own review
 router.put('/:id', auth, reviewController.updateReview);
 
-// DELETE /api/reviews/:id - Delete own review
-router.delete('/:id', auth, reviewController.deleteReview);
+// PATCH /api/reviews/:id/flag - Flag or unflag a review
+router.patch('/:id/flag', auth, reviewController.toggleFlagReview);
+
+// --- REPLIES ---
+const reviewReplyController = require('../controllers/reviewReply.controller');
+
+// POST /api/reviews/:reviewId/replies - Add a reply
+router.post('/:reviewId/replies', auth, reviewReplyController.createReply);
+
+// DELETE /api/reviews/replies/:id - Delete a reply
+router.delete('/replies/:id', auth, reviewReplyController.deleteReply);
 
 module.exports = router;

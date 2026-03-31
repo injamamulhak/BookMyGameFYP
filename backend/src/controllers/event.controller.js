@@ -152,10 +152,7 @@ const getFeaturedEvents = async (req, res) => {
         },
         _count: { select: { registrations: true } },
       },
-      orderBy: [
-        { venue: { rating: 'desc' } },
-        { createdAt: 'desc' }
-      ],
+      orderBy: [{ venue: { rating: 'desc' } }, { createdAt: 'desc' }],
       take: 6,
     })
 
@@ -343,9 +340,10 @@ const registerForEvent = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: registration.paymentStatus === 'completed' 
-        ? 'Successfully registered for event' 
-        : 'Registration pending payment',
+      message:
+        registration.paymentStatus === 'completed'
+          ? 'Successfully registered for event'
+          : 'Registration pending payment',
       data: registration,
     })
   } catch (error) {
@@ -390,13 +388,11 @@ const cancelRegistration = async (req, res) => {
       eventStart.setUTCHours(st.getUTCHours(), st.getUTCMinutes(), 0, 0)
     }
     if (eventStart < new Date()) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            'Cannot cancel registration for events that have already started',
-        })
+      return res.status(400).json({
+        success: false,
+        message:
+          'Cannot cancel registration for events that have already started',
+      })
     }
 
     // Compute refund based on registration fee
@@ -618,10 +614,35 @@ const createEvent = async (req, res) => {
     // Validate registration deadline if provided
     if (registrationDeadline) {
       const deadline = new Date(registrationDeadline)
+
+      // Create event start datetime
+      let eventStartDateTime
+      if (slots && Array.isArray(slots) && slots.length > 0) {
+        const sortedSlots = [...slots].sort((a, b) => {
+          if (a.date !== b.date) return a.date.localeCompare(b.date)
+          return a.startTime.localeCompare(b.startTime)
+        })
+        eventStartDateTime = new Date(`${sortedSlots[0].date}T${sortedSlots[0].startTime}`)
+      } else if (startTime) {
+        // startTime is stored as "HH:mm" format if passed as string
+        eventStartDateTime = new Date(`${startDate}T${startTime}`)
+      } else {
+        // If no specific time, use midnight of start date
+        eventStartDateTime = new Date(`${startDate}T00:00:00`)
+      }
+
       if (deadline < new Date()) {
         return res.status(400).json({
           success: false,
           message: 'Registration deadline cannot be in the past',
+        })
+      }
+
+      if (deadline >= eventStartDateTime) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Registration deadline must be before the event start date and time',
         })
       }
     }
@@ -708,10 +729,43 @@ const updateEvent = async (req, res) => {
     // Validate registration deadline if provided
     if (registrationDeadline !== undefined && registrationDeadline) {
       const deadline = new Date(registrationDeadline)
+
+      // Determine the event start datetime (use new values if provided, else use existing)
+      const eventStartDate = startDate || event.startDate
+      const eventStartTime =
+        startTime !== undefined
+          ? startTime
+          : event.startTime
+            ? `${String(event.startTime.getHours()).padStart(2, '0')}:${String(event.startTime.getMinutes()).padStart(2, '0')}`
+            : '00:00'
+
+      // Create event start datetime
+      let eventStartDateTime
+      const effectiveSlots = slots !== undefined ? slots : event.slots
+      if (effectiveSlots && Array.isArray(effectiveSlots) && effectiveSlots.length > 0) {
+        const sortedSlots = [...effectiveSlots].sort((a, b) => {
+          if (a.date !== b.date) return a.date.localeCompare(b.date)
+          return a.startTime.localeCompare(b.startTime)
+        })
+        eventStartDateTime = new Date(`${sortedSlots[0].date}T${sortedSlots[0].startTime}`)
+      } else if (eventStartTime) {
+        eventStartDateTime = new Date(`${eventStartDate}T${eventStartTime}`)
+      } else {
+        eventStartDateTime = new Date(`${eventStartDate}T00:00:00`)
+      }
+
       if (deadline < new Date()) {
         return res.status(400).json({
           success: false,
           message: 'Registration deadline cannot be in the past',
+        })
+      }
+
+      if (deadline >= eventStartDateTime) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Registration deadline must be before the event start date and time',
         })
       }
     }

@@ -37,11 +37,21 @@ const getOperatorBookings = async (req, res) => {
             });
         }
 
+        // Build date filter — merge into a single 'date' object to avoid spread overwriting
+        const dateFilter = {};
+        if (startDate) {
+            // Start of the selected day (UTC midnight)
+            dateFilter.gte = new Date(`${startDate}T00:00:00.000Z`);
+        }
+        if (endDate) {
+            // End of the selected day (one millisecond before midnight next day)
+            dateFilter.lte = new Date(`${endDate}T23:59:59.999Z`);
+        }
+
         const where = {
             slot: {
                 venueId: venueId ? venueId : { in: venueIds },
-                ...(startDate && { date: { gte: new Date(startDate) } }),
-                ...(endDate && { date: { lte: new Date(endDate) } }),
+                ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
             },
             ...(status && { status }),
         };

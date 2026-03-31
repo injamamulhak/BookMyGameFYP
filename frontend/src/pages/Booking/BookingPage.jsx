@@ -3,9 +3,40 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getVenueById } from '../../services/venueService';
 import api from '../../services/api';
 import { formatTime } from '../../utils/timeUtils';
+import { useAuth } from '../../context/AuthContext';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
 import VenueSlotCalendar from '../../components/common/VenueSlotCalendar';
+
+const EXPIRY_MINUTES = 5; // must match backend pendingPaymentCleaner.js
+
+/**
+ * Live countdown for a pending-payment booking shown on the slot selection page.
+ */
+function PendingCountdown({ createdAt, onExpired }) {
+    const expiryMs = new Date(createdAt).getTime() + EXPIRY_MINUTES * 60 * 1000;
+    const calcRemaining = () => Math.max(0, expiryMs - Date.now());
+    const [remaining, setRemaining] = useState(calcRemaining);
+
+    useEffect(() => {
+        if (remaining === 0) { onExpired(); return; }
+        const timer = setInterval(() => {
+            const r = calcRemaining();
+            setRemaining(r);
+            if (r === 0) { clearInterval(timer); onExpired(); }
+        }, 1000);
+        return () => clearInterval(timer);
+    }, []); // eslint-disable-line
+
+    const mins = Math.floor(remaining / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    const isUrgent = remaining < 60000;
+    return (
+        <span className={`font-mono font-bold text-lg ${isUrgent ? 'text-red-600' : 'text-amber-700'}`}>
+            {mins}:{secs.toString().padStart(2, '0')}
+        </span>
+    );
+}
 
 // Cart key for localStorage
 const CART_KEY = 'bookingCart';
@@ -13,10 +44,15 @@ const CART_KEY = 'bookingCart';
 function BookingPage() {
     const { venueId } = useParams();
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuth();
 
     const [venue, setVenue] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    // Pending-payment bookings for this venue (from previous incomplete payments)
+    const [pendingBookings, setPendingBookings] = useState([]);
+    const [retryingId, setRetryingId] = useState(null);
 
     // Cart state - array of { date, slot, venueId, venueName, sportName, venueImage, dateDisplay }
     const [cart, setCart] = useState([]);
@@ -57,6 +93,29 @@ function BookingPage() {
             }
         }
     }, [venueId, navigate]);
+
+    // Fetch any pending-payment bookings for this venue (incomplete payments)
+    useEffect(() => {
+        const fetchPendingBookings = async () => {
+            if (!isAuthenticated || !venueId) return;
+            try {
+                const response = await api.get('/bookings/my-bookings');
+                if (response.data.success) {
+                    const pending = response.data.data.filter(
+                        (b) =>
+                            b.status === 'pending' &&
+                            b.payments?.some((p) => p.status === 'pending') &&
+                            (b.slot?.venue?.id === venueId || b.slot?.venueId === venueId)
+                    );
+                    setPendingBookings(pending);
+                }
+            } catch (err) {
+                console.error('Error fetching pending bookings:', err);
+            }
+        };
+        fetchPendingBookings();
+    }, [isAuthenticated, venueId]);
+
 
     // Save cart to localStorage whenever it changes
     useEffect(() => {
@@ -214,6 +273,31 @@ function BookingPage() {
         return cart.reduce((sum, item) => sum + (item.slot.duration || 60), 0);
     }, [cart]);
 
+    /** Retry payment for a pending-payment booking */
+    const handleRetryPayment = useCallback(async (booking) => {
+        setRetryingId(booking.id);
+        try {
+            const response = await api.post('/payments/khalti/retry-booking', {
+                bookingIds: [booking.id],
+                amount: parseFloat(booking.totalPrice),
+                returnUrl: `${window.location.origin}/payment/callback`,
+            });
+            if (response.data.success && response.data.data.paymentUrl) {
+                window.location.href = response.data.data.paymentUrl;
+            } else {
+                alert('Failed to initiate payment. Please try again.');
+                setRetryingId(null);
+            }
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Failed to initiate payment';
+            alert(msg);
+            if (err.response?.status === 400) {
+                setPendingBookings((prev) => prev.filter((b) => b.id !== booking.id));
+            }
+            setRetryingId(null);
+        }
+    }, []);
+
     // Handle continue to checkout
     const handleContinue = () => {
         if (cart.length === 0) return;
@@ -296,13 +380,51 @@ function BookingPage() {
 
                 <div className="grid lg:grid-cols-3 gap-6">
                     {/* Left Column - Calendar & Slots (shared component) */}
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-4">
                         <VenueSlotCalendar
                             venue={venue}
                             onSlotClick={toggleSlotInCart}
                             selectedSlots={cart}
                             slotLabel={slotLabel}
                         />
+
+                        {/* ── Pending payment banners ── */}
+                        {pendingBookings.map((booking) => (
+                            <div
+                                key={booking.id}
+                                className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+                            >
+                                <div className="flex items-start gap-3">
+                                    <svg className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <div>
+                                        <p className="font-semibold text-amber-900">
+                                            You have an incomplete payment for this venue
+                                        </p>
+                                        <p className="text-sm text-amber-800 mt-0.5">
+                                            Slot reserved on {new Date(booking.bookingDate || booking.slot?.date).toDateString()}
+                                            {' · '}Rs. {parseFloat(booking.totalPrice).toLocaleString()} unpaid
+                                        </p>
+                                        <p className="text-xs text-amber-700 mt-1">
+                                            This slot will be released in{' '}
+                                            <PendingCountdown
+                                                createdAt={booking.createdAt}
+                                                onExpired={() => setPendingBookings((prev) => prev.filter((b) => b.id !== booking.id))}
+                                            />
+                                            {' '}if payment is not completed.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => handleRetryPayment(booking)}
+                                    disabled={retryingId === booking.id}
+                                    className="flex-shrink-0 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-60 whitespace-nowrap"
+                                >
+                                    {retryingId === booking.id ? 'Redirecting...' : '💳 Complete Payment'}
+                                </button>
+                            </div>
+                        ))}
                     </div>
 
                     {/* Right Column - Cart Summary */}

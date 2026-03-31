@@ -5,12 +5,51 @@ import { formatTime } from '../../utils/timeUtils'
 import Header from '../../components/layout/Header'
 import Footer from '../../components/layout/Footer'
 
+const EXPIRY_MINUTES = 5 // must match backend pendingPaymentCleaner.js
+
+/**
+ * Live countdown for a pending-payment booking.
+ * Shows minutes:seconds remaining. Calls onExpired() when it hits zero.
+ */
+function PendingCountdown({ createdAt, onExpired }) {
+  const expiryMs = new Date(createdAt).getTime() + EXPIRY_MINUTES * 60 * 1000
+  const calcRemaining = () => Math.max(0, expiryMs - Date.now())
+  const [remaining, setRemaining] = useState(calcRemaining)
+
+  useEffect(() => {
+    if (remaining === 0) {
+      onExpired()
+      return
+    }
+    const timer = setInterval(() => {
+      const r = calcRemaining()
+      setRemaining(r)
+      if (r === 0) {
+        clearInterval(timer)
+        onExpired()
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  }, []) // eslint-disable-line
+
+  const mins = Math.floor(remaining / 60000)
+  const secs = Math.floor((remaining % 60000) / 1000)
+  const isUrgent = remaining < 60000
+
+  return (
+    <span className={`font-mono font-bold ${isUrgent ? 'text-red-600' : 'text-amber-700'}`}>
+      {mins}:{secs.toString().padStart(2, '0')}
+    </span>
+  )
+}
+
 function MyBookings() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all')
   const [cancellingId, setCancellingId] = useState(null)
+  const [retryingId, setRetryingId] = useState(null)
 
   useEffect(() => {
     fetchBookings()
@@ -31,56 +70,57 @@ function MyBookings() {
     }
   }
 
-  const handleCancelBooking = async (
-    bookingId,
-    bookingDate,
-    startTime,
-    paidAmount,
-  ) => {
-    // Calculate refund estimate locally for confirmation prompt
+  /** Check if a booking has an unresolved pending payment */
+  const hasPendingPayment = (booking) =>
+    booking.status === 'pending' &&
+    booking.payments?.some((p) => p.status === 'pending')
+
+  /** Retry payment for a pending booking */
+  const handleRetryPayment = async (booking) => {
+    setRetryingId(booking.id)
+    try {
+      const response = await api.post('/payments/khalti/retry-booking', {
+        bookingIds: [booking.id],
+        amount: parseFloat(booking.totalPrice),
+        returnUrl: `${window.location.origin}/payment/callback`,
+      })
+      if (response.data.success && response.data.data.paymentUrl) {
+        window.location.href = response.data.data.paymentUrl
+      } else {
+        alert('Failed to initiate payment. Please try again.')
+        setRetryingId(null)
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to initiate payment'
+      alert(msg)
+      if (err.response?.status === 400) fetchBookings()
+      setRetryingId(null)
+    }
+  }
+
+  const handleCancelBooking = async (bookingId, bookingDate, startTime, paidAmount) => {
     const now = new Date()
     const slotDate = new Date(bookingDate)
     const slotStart = new Date(startTime)
     const startDateTime = new Date(
       Date.UTC(
-        slotDate.getUTCFullYear(),
-        slotDate.getUTCMonth(),
-        slotDate.getUTCDate(),
-        slotStart.getUTCHours(),
-        slotStart.getUTCMinutes(),
-        0,
+        slotDate.getUTCFullYear(), slotDate.getUTCMonth(), slotDate.getUTCDate(),
+        slotStart.getUTCHours(), slotStart.getUTCMinutes(), 0,
       ),
     )
-
     const hoursUntilStart = (startDateTime - now) / (1000 * 60 * 60)
     let refundMsg = 'Refund: 0% (less than 6 hours remaining)'
-    if (hoursUntilStart > 24) {
-      refundMsg = `Refund: 100% (Rs. ${paidAmount})`
-    } else if (hoursUntilStart > 6) {
-      refundMsg = `Refund: 50% (Rs. ${paidAmount / 2})`
-    }
+    if (hoursUntilStart > 24) refundMsg = `Refund: 100% (Rs. ${paidAmount})`
+    else if (hoursUntilStart > 6) refundMsg = `Refund: 50% (Rs. ${paidAmount / 2})`
 
-    if (
-      !window.confirm(
-        `Are you sure you want to cancel this booking?\n\n${refundMsg}`,
-      )
-    )
-      return
+    if (!window.confirm(`Are you sure you want to cancel this booking?\n\n${refundMsg}`)) return
 
     setCancellingId(bookingId)
     try {
       const response = await api.put(`/bookings/${bookingId}/cancel`)
       if (response.data.success) {
-        setBookings((prev) =>
-          prev.map((b) =>
-            b.id === bookingId ? { ...b, status: 'cancelled' } : b,
-          ),
-        )
-        if (response.data.data?.refundInfo?.message) {
-          alert(response.data.data.refundInfo.message)
-        } else {
-          alert('Booking cancelled successfully')
-        }
+        setBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, status: 'cancelled' } : b))
+        alert(response.data.data?.refundInfo?.message || 'Booking cancelled successfully')
       }
     } catch (err) {
       console.error('Error cancelling booking:', err)
@@ -90,14 +130,10 @@ function MyBookings() {
     }
   }
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+  const formatDate = (dateString) =>
+    new Date(dateString).toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     })
-  }
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -113,25 +149,17 @@ function MyBookings() {
     const slot = booking.slot || booking.timeSlot
     const dateStr = booking.bookingDate || slot?.date
     const timeStr = slot?.startTime || booking.startTime
-
     if (!dateStr || !timeStr) return null
-
     const slotDate = new Date(dateStr)
     const slotStart = new Date(timeStr)
-
-    return new Date(
-      Date.UTC(
-        slotDate.getUTCFullYear(),
-        slotDate.getUTCMonth(),
-        slotDate.getUTCDate(),
-        slotStart.getUTCHours(),
-        slotStart.getUTCMinutes(),
-        0,
-      ),
-    )
+    return new Date(Date.UTC(
+      slotDate.getUTCFullYear(), slotDate.getUTCMonth(), slotDate.getUTCDate(),
+      slotStart.getUTCHours(), slotStart.getUTCMinutes(), 0,
+    ))
   }
 
   const canCancelBooking = (booking) => {
+    if (hasPendingPayment(booking)) return false // hide cancel — only retry shown
     if (!['pending', 'confirmed'].includes(booking.status)) return false
     const bookingStart = getBookingStartDateTime(booking)
     if (!bookingStart) return false
@@ -156,19 +184,12 @@ function MyBookings() {
       <Header />
 
       <main className='container-custom py-6'>
-        {/* Header */}
         <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6'>
           <div>
-            <h1 className='text-2xl lg:text-3xl font-bold text-gray-900'>
-              My Bookings
-            </h1>
-            <p className='text-gray-600 mt-1'>
-              View and manage your venue bookings
-            </p>
+            <h1 className='text-2xl lg:text-3xl font-bold text-gray-900'>My Bookings</h1>
+            <p className='text-gray-600 mt-1'>View and manage your venue bookings</p>
           </div>
-          <Link to='/venues' className='btn-primary'>
-            Book New Venue
-          </Link>
+          <Link to='/venues' className='btn-primary'>Book New Venue</Link>
         </div>
 
         {/* Filter Tabs */}
@@ -184,9 +205,7 @@ function MyBookings() {
               key={key}
               onClick={() => setFilter(key)}
               className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                filter === key
-                  ? 'bg-primary-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
+                filter === key ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
               {label} ({statusCounts[key]})
@@ -203,154 +222,138 @@ function MyBookings() {
         ) : error ? (
           <div className='bg-white rounded-xl p-12 shadow-soft text-center'>
             <p className='text-red-600'>{error}</p>
-            <button onClick={fetchBookings} className='btn-primary mt-4'>
-              Retry
-            </button>
+            <button onClick={fetchBookings} className='btn-primary mt-4'>Retry</button>
           </div>
         ) : filteredBookings.length === 0 ? (
           <div className='bg-white rounded-xl p-12 shadow-soft text-center'>
-            <svg
-              className='w-16 h-16 mx-auto text-gray-300 mb-4'
-              fill='none'
-              stroke='currentColor'
-              viewBox='0 0 24 24'
-            >
-              <path
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth={2}
-                d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
-              />
+            <svg className='w-16 h-16 mx-auto text-gray-300 mb-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' />
             </svg>
-            <h3 className='text-lg font-semibold text-gray-900 mb-2'>
-              No bookings found
-            </h3>
+            <h3 className='text-lg font-semibold text-gray-900 mb-2'>No bookings found</h3>
             <p className='text-gray-500 mb-6'>
-              {filter === 'all'
-                ? "You haven't made any bookings yet."
-                : `No ${filter} bookings.`}
+              {filter === 'all' ? "You haven't made any bookings yet." : `No ${filter} bookings.`}
             </p>
-            <Link to='/venues' className='btn-primary'>
-              Browse Venues
-            </Link>
+            <Link to='/venues' className='btn-primary'>Browse Venues</Link>
           </div>
         ) : (
           <div className='space-y-4'>
             {filteredBookings.map((booking) => {
               const slot = booking.slot || booking.timeSlot
               const venue = booking.venue || slot?.venue
+              const isPendingPayment = hasPendingPayment(booking)
 
               return (
                 <div
                   key={booking.id}
-                  className='bg-white rounded-xl p-6 shadow-soft'
+                  className={`bg-white rounded-xl shadow-soft overflow-hidden ${
+                    isPendingPayment ? 'ring-2 ring-amber-400' : ''
+                  }`}
                 >
-                  <div className='flex flex-col lg:flex-row lg:items-center gap-4'>
-                    {/* Venue Image */}
-                    <Link
-                      to={venue?.id ? `/venues/${venue.id}` : '#'}
-                      className='flex-shrink-0'
-                    >
-                      <img
-                        src={
-                          venue?.images?.[0]?.imageUrl ||
-                          'https://via.placeholder.com/100'
-                        }
-                        alt={venue?.name}
-                        className='w-24 h-24 rounded-lg object-cover'
-                      />
-                    </Link>
-
-                    {/* Details */}
-                    <div className='flex-1 min-w-0'>
-                      <div className='flex items-start justify-between'>
+                  {/* ── Pending payment warning banner ── */}
+                  {isPendingPayment && (
+                    <div className='bg-amber-50 border-b border-amber-200 px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
+                      <div className='flex items-start gap-3'>
+                        <svg className='w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
+                        </svg>
                         <div>
-                          <Link
-                            to={venue?.id ? `/venues/${venue.id}` : '#'}
-                            className='text-lg font-bold text-gray-900 hover:text-primary-600'
-                          >
-                            {venue?.name || 'Venue'}
-                          </Link>
-                          <p className='text-gray-500 text-sm'>
-                            {venue?.sport?.name}
+                          <p className='text-sm font-semibold text-amber-800'>
+                            Payment not completed — slot held for{' '}
+                            <PendingCountdown createdAt={booking.createdAt} onExpired={fetchBookings} />
                           </p>
-                        </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(booking.status)}`}
-                        >
-                          {booking.status.charAt(0).toUpperCase() +
-                            booking.status.slice(1)}
-                        </span>
-                      </div>
-
-                      <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4'>
-                        <div>
-                          <p className='text-xs text-gray-500'>Date</p>
-                          <p className='font-medium text-gray-900'>
-                            {booking.bookingDate
-                              ? formatDate(booking.bookingDate)
-                              : 'N/A'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className='text-xs text-gray-500'>Time</p>
-                          <p className='font-medium text-gray-900'>
-                            {slot
-                              ? `${formatTime(slot.startTime)} - ${formatTime(slot.endTime)}`
-                              : 'N/A'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className='text-xs text-gray-500'>Amount</p>
-                          <p className='font-bold text-primary-600'>
-                            Rs. {booking.totalPrice?.toLocaleString()}
-                          </p>
-                        </div>
-                        <div>
-                          <p className='text-xs text-gray-500'>Booking ID</p>
-                          <p className='font-mono text-sm text-gray-900'>
-                            {booking.id.slice(0, 8)}...
+                          <p className='text-xs text-amber-700 mt-0.5'>
+                            Amount was not transferred. Complete payment before the timer expires or your slot will be automatically released.
                           </p>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className='flex flex-col gap-2 flex-shrink-0'>
-                      <Link
-                        to={`/my-bookings/${booking.id}`}
-                        className='px-4 py-2 bg-primary-50 text-primary-600 hover:bg-primary-100 rounded-lg font-medium transition-colors text-center border border-primary-100'
+                      <button
+                        onClick={() => handleRetryPayment(booking)}
+                        disabled={retryingId === booking.id}
+                        className='flex-shrink-0 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-60 whitespace-nowrap'
                       >
-                        View Details
+                        {retryingId === booking.id ? 'Redirecting...' : '💳 Complete Payment'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className='p-6'>
+                    <div className='flex flex-col lg:flex-row lg:items-center gap-4'>
+                      {/* Venue Image */}
+                      <Link to={venue?.id ? `/venues/${venue.id}` : '#'} className='flex-shrink-0'>
+                        <img
+                          src={venue?.images?.[0]?.imageUrl || 'https://via.placeholder.com/100'}
+                          alt={venue?.name}
+                          className='w-24 h-24 rounded-lg object-cover'
+                        />
                       </Link>
-                      
-                      {canCancelBooking(booking) && (
-                        <button
-                          onClick={() =>
-                            handleCancelBooking(
-                              booking.id,
-                              booking.slot?.date || booking.bookingDate,
-                              booking.slot?.startTime,
-                              booking.totalPrice,
-                            )
-                          }
-                          disabled={cancellingId === booking.id}
-                          className='px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors disabled:opacity-50 border border-transparent hover:border-red-100'
-                        >
-                          {cancellingId === booking.id
-                            ? 'Cancelling...'
-                            : 'Cancel'}
-                        </button>
-                      )}
-                      
-                      {booking.status === 'cancelled' &&
-                        booking.notes &&
-                        booking.notes.includes('Refund') && (
-                          <div className='mt-2 p-3 bg-red-50 text-red-700 text-xs rounded-lg max-w-xs'>
-                            <p className='font-semibold'>Refund Status</p>
-                            <p>Check Khalti wallet for refund (if applicable).</p>
+
+                      {/* Details */}
+                      <div className='flex-1 min-w-0'>
+                        <div className='flex items-start justify-between'>
+                          <div>
+                            <Link
+                              to={venue?.id ? `/venues/${venue.id}` : '#'}
+                              className='text-lg font-bold text-gray-900 hover:text-primary-600'
+                            >
+                              {venue?.name || 'Venue'}
+                            </Link>
+                            <p className='text-gray-500 text-sm'>{venue?.sport?.name}</p>
                           </div>
-                      )}
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(booking.status)}`}>
+                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                          </span>
+                        </div>
+
+                        <div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4'>
+                          <div>
+                            <p className='text-xs text-gray-500'>Date</p>
+                            <p className='font-medium text-gray-900'>
+                              {booking.bookingDate ? formatDate(booking.bookingDate) : 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className='text-xs text-gray-500'>Time</p>
+                            <p className='font-medium text-gray-900'>
+                              {slot ? `${formatTime(slot.startTime)} - ${formatTime(slot.endTime)}` : 'N/A'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className='text-xs text-gray-500'>Amount</p>
+                            <p className='font-bold text-primary-600'>Rs. {booking.totalPrice?.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className='text-xs text-gray-500'>Booking ID</p>
+                            <p className='font-mono text-sm text-gray-900'>{booking.id.slice(0, 8)}...</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className='flex flex-col gap-2 flex-shrink-0'>
+                        <Link
+                          to={`/my-bookings/${booking.id}`}
+                          className='px-4 py-2 bg-primary-50 text-primary-600 hover:bg-primary-100 rounded-lg font-medium transition-colors text-center border border-primary-100'
+                        >
+                          View Details
+                        </Link>
+
+                        {canCancelBooking(booking) && (
+                          <button
+                            onClick={() =>
+                              handleCancelBooking(
+                                booking.id,
+                                booking.slot?.date || booking.bookingDate,
+                                booking.slot?.startTime,
+                                booking.totalPrice,
+                              )
+                            }
+                            disabled={cancellingId === booking.id}
+                            className='px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors disabled:opacity-50 border border-transparent hover:border-red-100'
+                          >
+                            {cancellingId === booking.id ? 'Cancelling...' : 'Cancel'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

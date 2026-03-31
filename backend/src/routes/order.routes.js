@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/order.controller');
 const { auth } = require('../middleware/auth');
-const { isAdmin } = require('../middleware/roleCheck');
+const { isAdmin, isOperator } = require('../middleware/roleCheck');
 const validate = require('../middleware/validate');
 const { createOrderValidator, updateOrderStatusValidator } = require('../validators/order.validator');
 
@@ -25,6 +25,32 @@ router.get(
 router.get(
     '/:id',
     orderController.getOrderById
+);
+
+router.put(
+    '/my-orders/:id',
+    orderController.updateMyOrder
+);
+
+// Operator Routes
+router.get(
+    '/operator/all',
+    isOperator,
+    orderController.getOperatorOrders
+);
+
+router.get(
+    '/operator/:id',
+    isOperator,
+    orderController.getOperatorOrderById
+);
+
+router.put(
+    '/operator/:id/status',
+    isOperator,
+    updateOrderStatusValidator,
+    validate,
+    orderController.updateOperatorOrderStatus
 );
 
 // Admin Routes

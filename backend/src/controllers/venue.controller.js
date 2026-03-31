@@ -15,8 +15,21 @@ const prisma = require('../config/prisma');
  */
 const getVenues = async (req, res) => {
     try {
-        const { city, sport, search, minPrice, maxPrice, page = 1, limit = 10 } = req.query;
+        const { city, sport, search, minPrice, maxPrice, sortBy, page = 1, limit = 10 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        let orderBy = { rating: 'desc' }; // default
+        if (sortBy === 'price_asc') {
+            orderBy = { pricePerHour: 'asc' };
+        } else if (sortBy === 'price_desc') {
+            orderBy = { pricePerHour: 'desc' };
+        } else if (sortBy === 'rating_desc') {
+            orderBy = { rating: 'desc' };
+        } else if (sortBy === 'newest') {
+            orderBy = { createdAt: 'desc' };
+        } else if (sortBy === 'relevance') {
+            orderBy = { rating: 'desc' };
+        }
 
         const where = {
             isActive: true,
@@ -56,7 +69,7 @@ const getVenues = async (req, res) => {
                         select: { reviews: true },
                     },
                 },
-                orderBy: { rating: 'desc' },
+                orderBy,
                 skip,
                 take: parseInt(limit),
             }),

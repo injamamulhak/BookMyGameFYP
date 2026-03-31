@@ -23,6 +23,7 @@ import MyBookings from './pages/User/MyBookings';
 import UserBookingDetail from './pages/User/UserBookingDetail';
 import MyEvents from './pages/User/MyEvents';
 import MyOrders from './pages/User/MyOrders';
+import UserOrderDetail from './pages/User/UserOrderDetail';
 
 // Booking imports
 import BookingPage from './pages/Booking/BookingPage';
@@ -46,6 +47,9 @@ import AddEditEvent from './pages/Operator/AddEditEvent';
 import EventRegistrations from './pages/Operator/EventRegistrations';
 import OperatorProducts from './pages/Operator/OperatorProducts';
 import AddEditProduct from './pages/Operator/AddEditProduct';
+import ManageOrders from './pages/Operator/ManageOrders';
+import OperatorOrderDetail from './pages/Operator/OperatorOrderDetail';
+import ManageReviews from './pages/Operator/ManageReviews';
 
 // Admin imports
 import AdminLayout from './components/layout/AdminLayout';
@@ -57,6 +61,7 @@ import UserManagement from './pages/Admin/UserManagement';
 import AdminProducts from './pages/Admin/AdminProducts';
 import SellerRequests from './pages/Admin/SellerRequests';
 import AdminTrainingVideos from './pages/Admin/AdminTrainingVideos';
+import FlaggedReviews from './pages/Admin/FlaggedReviews';
 
 function App() {
     return (
@@ -121,6 +126,14 @@ function App() {
                             element={
                                 <ProtectedRoute>
                                     <MyOrders />
+                                </ProtectedRoute>
+                            }
+                        />
+                        <Route
+                            path="/my-orders/:id"
+                            element={
+                                <ProtectedRoute>
+                                    <UserOrderDetail />
                                 </ProtectedRoute>
                             }
                         />
@@ -190,6 +203,9 @@ function App() {
                             <Route path="products" element={<OperatorProducts />} />
                             <Route path="products/new" element={<AddEditProduct />} />
                             <Route path="products/:id/edit" element={<AddEditProduct />} />
+                            <Route path="orders" element={<ManageOrders />} />
+                            <Route path="orders/:id" element={<OperatorOrderDetail />} />
+                            <Route path="reviews" element={<ManageReviews />} />
                         </Route>
 
                         {/* Admin Routes */}
@@ -209,6 +225,7 @@ function App() {
                             <Route path="products" element={<AdminProducts />} />
                             <Route path="seller-requests" element={<SellerRequests />} />
                             <Route path="training" element={<AdminTrainingVideos />} />
+                            <Route path="reviews/flagged" element={<FlaggedReviews />} />
                         </Route>
                     </Routes>
                 </div>

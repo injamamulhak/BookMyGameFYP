@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { createNotification } = require('../models/notification.model');
 
 /**
  * Review Controller
@@ -35,6 +36,19 @@ const getVenueReviews = async (req, res) => {
                             profileImage: true,
                         },
                     },
+                    replies: {
+                        include: {
+                            user: {
+                                select: {
+                                    id: true,
+                                    fullName: true,
+                                    role: true,
+                                    profileImage: true
+                                }
+                            }
+                        },
+                        orderBy: { createdAt: 'asc' }
+                    }
                 },
                 orderBy,
                 skip,
@@ -165,6 +179,18 @@ const createReview = async (req, res) => {
             },
         });
 
+        // Notify operator about the new review
+        if (venue.operatorId && venue.operatorId !== userId) {
+            await createNotification({
+                userId: venue.operatorId,
+                type: 'new_review',
+                title: 'New Venue Review',
+                message: `Your venue ${venue.name} received a new ${rating}-star review.`,
+                relatedEntityType: 'review',
+                relatedEntityId: review.id,
+            });
+        }
+
         res.status(201).json({
             success: true,
             message: 'Review submitted successfully',
@@ -240,13 +266,25 @@ const updateReview = async (req, res) => {
             _count: { rating: true },
         });
 
-        await prisma.venue.update({
+        const venueInfo = await prisma.venue.update({
             where: { id: review.venueId },
             data: {
                 rating: stats._avg.rating || 0,
                 totalReviews: stats._count.rating || 0,
             },
         });
+
+        // Notify operator about updated review
+        if (venueInfo.operatorId && venueInfo.operatorId !== userId) {
+            await createNotification({
+                userId: venueInfo.operatorId,
+                type: 'updated_review',
+                title: 'Review Updated',
+                message: `A user has updated their ${rating}-star review on your venue ${venueInfo.name}.`,
+                relatedEntityType: 'review',
+                relatedEntityId: updatedReview.id,
+            });
+        }
 
         res.json({
             success: true,
@@ -378,10 +416,57 @@ const canReviewVenue = async (req, res) => {
     }
 };
 
+// Toggle flag status of a review (authenticated, Operator/Admin only)
+// PATCH /api/reviews/:id/flag
+const toggleFlagReview = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+
+        const review = await prisma.review.findUnique({
+            where: { id },
+            include: { venue: true }
+        });
+
+        if (!review) {
+            return res.status(404).json({
+                success: false,
+                message: 'Review not found',
+            });
+        }
+
+        // Only venue operator or admin can flag
+        if (review.venue.operatorId !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'You do not have permission to flag this review',
+            });
+        }
+
+        const updatedReview = await prisma.review.update({
+            where: { id },
+            data: { isFlagged: !review.isFlagged },
+        });
+
+        res.json({
+            success: true,
+            message: `Review ${updatedReview.isFlagged ? 'flagged' : 'unflagged'} successfully`,
+            data: updatedReview,
+        });
+    } catch (error) {
+        console.error('Toggle flag review error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to toggle review flag',
+        });
+    }
+};
+
 module.exports = {
     getVenueReviews,
     createReview,
     updateReview,
     deleteReview,
     canReviewVenue,
+    toggleFlagReview,
 };

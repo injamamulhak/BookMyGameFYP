@@ -79,11 +79,8 @@ class EmailService {
     } catch (error) {
       console.error('❌ Error sending verification email:', error)
 
-      // Don't throw error - allow user registration to continue even if email fails
-      return {
-        success: false,
-        error: error.message,
-      }
+      // Throw error to allow caller to handle it
+      throw new Error(`Failed to send verification email: ${error.message}`)
     }
   }
 
@@ -119,11 +116,8 @@ class EmailService {
       }
     } catch (error) {
       console.error('❌ Error sending password reset email:', error)
-
-      return {
-        success: false,
-        error: error.message,
-      }
+      // Throw error to allow caller to handle it
+      throw new Error(`Failed to send password reset email: ${error.message}`)
     }
   }
 
@@ -181,9 +175,17 @@ class EmailService {
   async sendEventRegistrationReceipt(email, receiptData) {
     try {
       const {
-        userName, userEmail, registrationId, eventTitle, venueName, venueAddress,
-        startDate, endDate, amount, transactionId,
-      } = receiptData;
+        userName,
+        userEmail,
+        registrationId,
+        eventTitle,
+        venueName,
+        venueAddress,
+        startDate,
+        endDate,
+        amount,
+        transactionId,
+      } = receiptData
 
       // Generate QR code
       const qrData = JSON.stringify({
@@ -192,15 +194,21 @@ class EmailService {
         event: eventTitle,
         venue: venueName,
         user: userEmail,
-      });
+      })
       const qrBuffer = await QRCode.toBuffer(qrData, {
         errorCorrectionLevel: 'M',
         margin: 1,
         width: 200,
         color: { dark: '#1a1a2e', light: '#ffffff' },
-      });
+      })
 
-      const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const formatDate = (d) =>
+        new Date(d).toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
 
       const html = `
 <!DOCTYPE html><html><body style="font-family:Arial,sans-serif;background:#f4f6fb;padding:32px 0;margin:0;">
@@ -231,7 +239,7 @@ class EmailService {
     <p style="color:#9ca3af;font-size:12px;text-align:center;">© ${new Date().getFullYear()} BookMyGame</p>
   </div>
 </div>
-</body></html>`;
+</body></html>`
 
       const info = await this.transporter.sendMail({
         from: emailConfig.from,
@@ -239,18 +247,20 @@ class EmailService {
         subject: `Event Registration Confirmed – ${eventTitle} | BookMyGame`,
         html,
         text: `Hi ${userName}, you are confirmed for "${eventTitle}" at ${venueName}. Amount: Rs. ${amount}. Registration ID: ${registrationId}.`,
-        attachments: [{
-          filename: 'qrcode.png',
-          content: qrBuffer,
-          cid: 'qrcode@bookmygame.com',
-        }],
-      });
+        attachments: [
+          {
+            filename: 'qrcode.png',
+            content: qrBuffer,
+            cid: 'qrcode@bookmygame.com',
+          },
+        ],
+      })
 
-      console.log('✅ Event registration receipt sent:', info.messageId);
-      return { success: true, messageId: info.messageId };
+      console.log('✅ Event registration receipt sent:', info.messageId)
+      return { success: true, messageId: info.messageId }
     } catch (error) {
-      console.error('❌ Error sending event registration receipt:', error);
-      return { success: false, error: error.message };
+      console.error('❌ Error sending event registration receipt:', error)
+      return { success: false, error: error.message }
     }
   }
 

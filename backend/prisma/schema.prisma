@@ -32,7 +32,7 @@ datasource db {
 
 enum UserRole {
   user
-  operator     // Changed from venue_owner to match proposal
+  operator // Changed from venue_owner to match proposal
   admin
 }
 
@@ -77,40 +77,45 @@ enum OrderStatus {
 // ============================================
 
 model User {
-  id               String    @id @default(uuid())
-  email            String    @unique @db.VarChar(255)
-  passwordHash     String    @map("password_hash")
-  fullName         String    @map("full_name") @db.VarChar(255)
-  phone            String?   @db.VarChar(20)
-  role             UserRole  @default(user)
-  profileImage     String?   @map("profile_image")
+  id                      String    @id @default(uuid())
+  email                   String    @unique @db.VarChar(255)
+  passwordHash            String    @map("password_hash")
+  fullName                String    @map("full_name") @db.VarChar(255)
+  phone                   String?   @db.VarChar(20)
+  role                    UserRole  @default(user)
+  profileImage            String?   @map("profile_image")
   isVerified              Boolean   @default(false) @map("is_verified")
   verificationToken       String?   @unique @map("verification_token")
   verificationTokenExpiry DateTime? @map("verification_token_expiry")
   verifiedAt              DateTime? @map("verified_at")
-  
+
   // Password reset fields
-  resetToken              String?   @unique @map("reset_token")
-  resetTokenExpiry        DateTime? @map("reset_token_expiry")
-  
-  createdAt               DateTime  @default(now()) @map("created_at")
-  updatedAt               DateTime  @updatedAt @map("updated_at")
+  resetToken       String?   @unique @map("reset_token")
+  resetTokenExpiry DateTime? @map("reset_token_expiry")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  preferences           UserPreference?
-  preferredSports       UserPreferredSport[]
-  favoriteVenues        UserFavoriteVenue[]
-  ownedVenues           Venue[]              @relation("VenueOperator")
-  approvedVenues        Venue[]              @relation("VenueApprover")
-  bookings              Booking[]
-  reviews               Review[]
-  eventRegistrations    EventRegistration[]
-  orders                Order[]
-  payments              Payment[]
-  notifications         Notification[]
-  productsSelling       Product[]            @relation("ProductSeller")
-  canSellProducts       Boolean              @default(false) @map("can_sell_products")
-  sellerRequestStatus   String               @default("none") @map("seller_request_status") @db.VarChar(20)
+  preferences         UserPreference?
+  preferredSports     UserPreferredSport[]
+  favoriteVenues      UserFavoriteVenue[]
+  ownedVenues         Venue[]              @relation("VenueOperator")
+  approvedVenues      Venue[]              @relation("VenueApprover")
+  bookings            Booking[]
+  reviews             Review[]
+  eventRegistrations  EventRegistration[]
+  orders              Order[]
+  payments            Payment[]
+  notifications       Notification[]
+  productsSelling     Product[]            @relation("ProductSeller")
+  canSellProducts     Boolean              @default(false) @map("can_sell_products")
+  sellerRequestStatus String               @default("none") @map("seller_request_status") @db.VarChar(20)
+  // Video upload fields
+  canUploadVideos     Boolean              @default(false) @map("can_upload_videos")
+  videoUploaderRequestStatus String        @default("none") @map("video_uploader_request_status") @db.VarChar(20)
+  uploadedVideos      TrainingVideo[]      @relation("VideoUploader")
+  ReviewReply         ReviewReply[]
 
   @@index([email])
   @@index([role])
@@ -118,17 +123,17 @@ model User {
 }
 
 model UserPreference {
-  id                 String   @id @default(uuid())
-  userId             String   @unique @map("user_id")
-  preferredLocation  String?  @map("preferred_location") @db.VarChar(200)
-  preferredLatitude  Decimal? @map("preferred_latitude") @db.Decimal(10, 8)
-  preferredLongitude Decimal? @map("preferred_longitude") @db.Decimal(11, 8)
-  maxDistanceKm      Int      @default(10) @map("max_distance_km")
-  preferredPriceMin  Decimal? @map("preferred_price_min") @db.Decimal(10, 2)
-  preferredPriceMax  Decimal? @map("preferred_price_max") @db.Decimal(10, 2)
-  notificationEnabled Boolean @default(true) @map("notification_enabled")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  preferredLocation   String?  @map("preferred_location") @db.VarChar(200)
+  preferredLatitude   Decimal? @map("preferred_latitude") @db.Decimal(10, 8)
+  preferredLongitude  Decimal? @map("preferred_longitude") @db.Decimal(11, 8)
+  maxDistanceKm       Int      @default(10) @map("max_distance_km")
+  preferredPriceMin   Decimal? @map("preferred_price_min") @db.Decimal(10, 2)
+  preferredPriceMax   Decimal? @map("preferred_price_max") @db.Decimal(10, 2)
+  notificationEnabled Boolean  @default(true) @map("notification_enabled")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -171,44 +176,44 @@ model UserPreferredSport {
 // ============================================
 
 model Venue {
-  id              String         @id @default(uuid())
-  operatorId      String         @map("operator_id")
-  sportId         String         @map("sport_id")
-  name            String         @db.VarChar(255)
-  description     String?
-  address         String
-  city            String?        @db.VarChar(100)
-  state           String?        @db.VarChar(100)
-  postalCode      String?        @map("postal_code") @db.VarChar(20)
-  latitude        Decimal?       @db.Decimal(10, 8)
-  longitude       Decimal?       @db.Decimal(11, 8)
-  pricePerHour    Decimal        @map("price_per_hour") @db.Decimal(10, 2)
-  contactPhone    String?        @map("contact_phone") @db.VarChar(20)
-  contactEmail    String?        @map("contact_email") @db.VarChar(255)
-  amenities       Json?
-  
+  id           String   @id @default(uuid())
+  operatorId   String   @map("operator_id")
+  sportId      String   @map("sport_id")
+  name         String   @db.VarChar(255)
+  description  String?
+  address      String
+  city         String?  @db.VarChar(100)
+  state        String?  @db.VarChar(100)
+  postalCode   String?  @map("postal_code") @db.VarChar(20)
+  latitude     Decimal? @db.Decimal(10, 8)
+  longitude    Decimal? @db.Decimal(11, 8)
+  pricePerHour Decimal  @map("price_per_hour") @db.Decimal(10, 2)
+  contactPhone String?  @map("contact_phone") @db.VarChar(20)
+  contactEmail String?  @map("contact_email") @db.VarChar(255)
+  amenities    Json?
+
   // ADMIN APPROVAL WORKFLOW
   approvalStatus  ApprovalStatus @default(pending) @map("approval_status")
   approvedBy      String?        @map("approved_by")
   approvedAt      DateTime?      @map("approved_at")
   rejectionReason String?        @map("rejection_reason")
-  
-  isActive        Boolean        @default(true) @map("is_active")
-  rating          Decimal        @default(0.00) @db.Decimal(3, 2)
-  totalReviews    Int            @default(0) @map("total_reviews")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  isActive     Boolean  @default(true) @map("is_active")
+  rating       Decimal  @default(0.00) @db.Decimal(3, 2)
+  totalReviews Int      @default(0) @map("total_reviews")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  operator        User                 @relation("VenueOperator", fields: [operatorId], references: [id], onDelete: Cascade)
-  approver        User?                @relation("VenueApprover", fields: [approvedBy], references: [id])
-  sport           Sport                @relation(fields: [sportId], references: [id])
-  operatingHours  VenueOperatingHour[]
-  images          VenueImage[]
-  favoritedBy     UserFavoriteVenue[]
-  timeSlots       TimeSlot[]
-  reviews         Review[]
-  events          Event[]
+  operator       User                 @relation("VenueOperator", fields: [operatorId], references: [id], onDelete: Cascade)
+  approver       User?                @relation("VenueApprover", fields: [approvedBy], references: [id])
+  sport          Sport                @relation(fields: [sportId], references: [id])
+  operatingHours VenueOperatingHour[]
+  images         VenueImage[]
+  favoritedBy    UserFavoriteVenue[]
+  timeSlots      TimeSlot[]
+  reviews        Review[]
+  events         Event[]
 
   @@index([operatorId])
   @@index([sportId])
@@ -221,13 +226,13 @@ model Venue {
 
 // DAY-WISE OPERATING HOURS
 model VenueOperatingHour {
-  id          String   @id @default(uuid())
-  venueId     String   @map("venue_id")
-  dayOfWeek   Int      @map("day_of_week") // 0=Sunday, 1=Monday, ..., 6=Saturday
-  isClosed    Boolean  @default(false) @map("is_closed")
+  id          String    @id @default(uuid())
+  venueId     String    @map("venue_id")
+  dayOfWeek   Int       @map("day_of_week") // 0=Sunday, 1=Monday, ..., 6=Saturday
+  isClosed    Boolean   @default(false) @map("is_closed")
   openingTime DateTime? @map("opening_time") @db.Time
   closingTime DateTime? @map("closing_time") @db.Time
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
@@ -355,14 +360,31 @@ model Review {
   comment   String?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  isFlagged Boolean  @default(false) @map("is_flagged")
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  venue   Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  booking Booking? @relation(fields: [bookingId], references: [id])
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue   Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  booking Booking?      @relation(fields: [bookingId], references: [id])
+  replies ReviewReply[]
 
   @@index([venueId])
   @@index([userId])
   @@map("reviews")
+}
+
+model ReviewReply {
+  id        String   @id @default(uuid())
+  reviewId  String   @map("review_id")
+  userId    String   @map("user_id")
+  comment   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+  @@map("review_replies")
 }
 
 // ============================================
@@ -379,7 +401,7 @@ model Event {
   endDate              DateTime  @map("end_date") @db.Date
   startTime            DateTime? @map("start_time") @db.Time
   endTime              DateTime? @map("end_time") @db.Time
-  slots                Json?     // Precise non-contiguous blocked slots array [{date, startTime, endTime}]
+  slots                Json? // Precise non-contiguous blocked slots array [{date, startTime, endTime}]
   registrationFee      Decimal   @default(0) @map("registration_fee") @db.Decimal(10, 2)
   maxParticipants      Int?      @map("max_participants")
   imageUrl             String?   @map("image_url")
@@ -421,20 +443,23 @@ model EventRegistration {
 model TrainingVideo {
   id              String           @id @default(uuid())
   sportId         String?          @map("sport_id")
+  uploaderId      String?          @map("uploader_id")
   title           String           @db.VarChar(255)
   description     String?
   videoUrl        String           @map("video_url")
   thumbnailUrl    String?          @map("thumbnail_url")
-  duration        Int?             // in seconds
+  duration        Int? // in seconds
   difficultyLevel DifficultyLevel? @map("difficulty_level")
   viewCount       Int              @default(0) @map("view_count")
   isActive        Boolean          @default(true) @map("is_active")
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
-  sport Sport? @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  sport          Sport?  @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  uploader       User?   @relation("VideoUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
 
   @@index([sportId])
+  @@index([uploaderId])
   @@index([difficultyLevel])
   @@map("training_videos")
 }

@@ -7,6 +7,7 @@ import FeaturedVenues from './components/FeaturedVenues';
 import UpcomingEvents from './components/UpcomingEvents';
 import GearMarketplace from './components/GearMarketplace';
 import HowItWorks from './components/HowItWorks';
+import TopReviews from './components/TopReviews';
 
 function LandingPage() {
     return (
@@ -25,6 +26,9 @@ function LandingPage() {
 
                 {/* Upcoming Events */}
                 <UpcomingEvents />
+
+                {/* Player Reviews Showcase */}
+                <TopReviews />
 
                 {/* Sports Gear Marketplace */}
                 <GearMarketplace />

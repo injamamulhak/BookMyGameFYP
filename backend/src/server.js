@@ -79,6 +79,14 @@ const PORT = config.port;
 server.listen(PORT, () => {
     console.log(`🚀 Server running in ${config.nodeEnv} mode on port ${PORT}`);
     console.log(`📡 API available at http://localhost:${PORT}/api`);
+
+    // Start background cron: auto-expire pending bookings/registrations after 5 min
+    const { startPendingPaymentCleaner } = require('./services/pendingPaymentCleaner');
+    startPendingPaymentCleaner();
+
+    // Start background cron: check for completed bookings and ask for reviews
+    const { startCompletedBookingChecker } = require('./services/completedBookingChecker');
+    startCompletedBookingChecker();
 });
 
 module.exports = app;

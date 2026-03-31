@@ -49,11 +49,14 @@ const findByUser = async (userId, { status, page = 1, limit = 10 } = {}) => {
 const findByOperatorVenues = async (venueIds, { venueId, status, startDate, endDate, page = 1, limit = 20 } = {}) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    const dateFilter = {};
+    if (startDate) dateFilter.gte = new Date(`${startDate}T00:00:00.000Z`);
+    if (endDate)   dateFilter.lte = new Date(`${endDate}T23:59:59.999Z`);
+
     const where = {
         slot: {
             venueId: venueId ? venueId : { in: venueIds },
-            ...(startDate && { date: { gte: new Date(startDate) } }),
-            ...(endDate && { date: { lte: new Date(endDate) } }),
+            ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
         },
         ...(status && { status }),
     };

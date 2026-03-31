@@ -85,6 +85,12 @@ function ManageBookings() {
         setPagination(prev => ({ ...prev, page: 1 }));
     };
 
+    /** Atomically update multiple filter keys at once (avoids double API call) */
+    const handleDateRangeChange = (updates) => {
+        setFilters(prev => ({ ...prev, ...updates }));
+        setPagination(prev => ({ ...prev, page: 1 }));
+    };
+
     const handleConfirmBooking = async (bookingId) => {
         if (!confirm('Are you sure you want to confirm this booking?')) return;
 
@@ -245,7 +251,7 @@ function ManageBookings() {
                     </div>
                 </div>
 
-                {/* Date Range (collapsible on mobile) */}
+                {/* Date Range */}
                 <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -253,7 +259,16 @@ function ManageBookings() {
                             <input
                                 type="date"
                                 value={filters.startDate}
-                                onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                                max={filters.endDate || undefined}
+                                onChange={(e) => {
+                                    const newStart = e.target.value;
+                                    // If new start is after current end, clear end atomically
+                                    if (filters.endDate && newStart > filters.endDate) {
+                                        handleDateRangeChange({ startDate: newStart, endDate: '' });
+                                    } else {
+                                        handleFilterChange('startDate', newStart);
+                                    }
+                                }}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                             />
                         </div>
@@ -262,12 +277,22 @@ function ManageBookings() {
                             <input
                                 type="date"
                                 value={filters.endDate}
-                                onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                                min={filters.startDate || undefined}
+                                onChange={(e) => {
+                                    const newEnd = e.target.value;
+                                    // If new end is before current start, clear start atomically
+                                    if (filters.startDate && newEnd < filters.startDate) {
+                                        handleDateRangeChange({ startDate: '', endDate: newEnd });
+                                    } else {
+                                        handleFilterChange('endDate', newEnd);
+                                    }
+                                }}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                             />
                         </div>
                     </div>
                 </div>
+
             </div>
 
             {/* Stats Summary */}

@@ -32,6 +32,7 @@ const auth = async (req, res, next) => {
                 role: true,
                 isVerified: true,
                 profileImage: true,
+                phone: true,
             },
         });
 
@@ -93,6 +94,7 @@ const optionalAuth = async (req, res, next) => {
                 role: true,
                 isVerified: true,
                 profileImage: true,
+                phone: true,
             },
         });
 

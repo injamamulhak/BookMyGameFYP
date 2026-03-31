@@ -84,12 +84,21 @@ function MyOrders() {
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between sm:justify-end gap-4 min-w-[200px]">
-                                        <p className="text-sm text-gray-500">
-                                            <span className="font-medium">Order ID:</span> {order.id.slice(0, 8).toUpperCase()}
-                                        </p>
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusColor(order.status)}`}>
-                                            {order.status}
-                                        </span>
+                                        <div className="text-right">
+                                            <p className="text-sm text-gray-500 mb-1">
+                                                <span className="font-medium">Order ID:</span> {order.id.slice(0, 8).toUpperCase()}
+                                            </p>
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border ${getStatusColor(order.status)}`}>
+                                                {order.status}
+                                            </span>
+                                        </div>
+                                        <Link 
+                                            to={`/my-orders/${order.id}`}
+                                            className="ml-4 p-2 text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors font-medium text-sm border border-transparent hover:border-primary-200"
+                                            title="View Details"
+                                        >
+                                            View Details &rarr;
+                                        </Link>
                                     </div>
                                 </div>
                                 <div className="p-6">

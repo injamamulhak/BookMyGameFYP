@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { getVenueById } from '../../services/venueService'
 import {
   getVenueReviews,
@@ -10,6 +13,67 @@ import { useAuth } from '../../context/AuthContext'
 import { formatTime } from '../../utils/timeUtils'
 import Header from '../../components/layout/Header'
 import Footer from '../../components/layout/Footer'
+import ReviewSection from '../../components/Reviews/ReviewSection'
+
+// Fix Leaflet default icon paths in bundled environments
+delete L.Icon.Default.prototype._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+})
+
+// Mini-map component for venue location
+function VenueMiniMap({ lat, lng, name, address }) {
+  return (
+    <div className='bg-white rounded-xl shadow-soft overflow-hidden mt-6'>
+      <div className='px-6 pt-5 pb-3'>
+        <h2 className='text-lg font-bold text-gray-900 flex items-center gap-2'>
+          <svg className='w-5 h-5 text-primary-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z' />
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M15 11a3 3 0 11-6 0 3 3 0 016 0z' />
+          </svg>
+          Location
+        </h2>
+      </div>
+      <div style={{ height: 220 }}>
+        <MapContainer
+          center={[lat, lng]}
+          zoom={15}
+          style={{ width: '100%', height: '100%' }}
+          zoomControl={false}
+          scrollWheelZoom={false}
+          dragging={false}
+          doubleClickZoom={false}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+          />
+          <Marker position={[lat, lng]}>
+            <Popup>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{name}</div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{address}</div>
+            </Popup>
+          </Marker>
+        </MapContainer>
+      </div>
+      <div className='px-6 py-3 border-t border-gray-100'>
+        <a
+          href={`https://www.google.com/maps?q=${lat},${lng}`}
+          target='_blank'
+          rel='noopener noreferrer'
+          className='flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors'
+        >
+          <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14' />
+          </svg>
+          Open in Google Maps
+        </a>
+      </div>
+    </div>
+  )
+}
 
 // Amenity icons mapping
 const amenityIcons = {
@@ -595,171 +659,50 @@ function VenueDetail() {
               </div>
             )}
 
-            {/* Reviews Section */}
-            <div className='bg-white rounded-xl p-6 shadow-soft'>
-              <div className='flex items-center justify-between mb-6'>
-                <h2 className='text-xl font-bold text-gray-900'>
-                  Reviews (
-                  {reviewsPagination.total || venue._count?.reviews || 0})
-                </h2>
-                <div className='flex items-center gap-4'>
-                  {venue.rating && (
-                    <div className='flex items-center gap-2'>
-                      <StarRating rating={Math.round(venue.rating)} size='md' />
-                      <span className='font-bold text-gray-900'>
-                        {Number(venue.rating).toFixed(1)}
-                      </span>
-                    </div>
-                  )}
-                  {canReview && !showReviewForm && (
-                    <button
-                      onClick={() => setShowReviewForm(true)}
-                      className='btn-primary py-2 px-4 text-sm'
-                    >
-                      Write Review
-                    </button>
-                  )}
-                </div>
-              </div>
+            {/* Reviews Section using new dynamic component */}
+            <ReviewSection venueId={venue.id} currentUser={user} />
+          </div>
 
-              {/* Review Form */}
-              {showReviewForm && (
-                <ReviewForm
-                  venueId={id}
-                  onReviewSubmitted={handleReviewSubmitted}
-                  eligibleBookingId={eligibleBookingId}
-                />
-              )}
-
-              {/* Login prompt for non-authenticated users */}
-              {!isAuthenticated && (
-                <div className='bg-blue-50 rounded-lg p-4 mb-6'>
-                  <p className='text-blue-800 text-sm'>
-                    <Link to='/login' className='font-semibold underline'>
-                      Log in
-                    </Link>{' '}
-                    to leave a review after booking this venue.
-                  </p>
-                </div>
-              )}
-
-              {/* Reviews List */}
-              {reviewsLoading ? (
-                <div className='flex justify-center py-8'>
-                  <div className='animate-spin w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full'></div>
-                </div>
-              ) : reviews.length > 0 ? (
-                <>
-                  <div className='space-y-6'>
-                    {reviews.map((review) => (
-                      <div
-                        key={review.id}
-                        className='border-b border-gray-100 pb-6 last:border-0 last:pb-0'
-                      >
-                        <div className='flex items-start gap-4'>
-                          <div className='w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center text-white font-semibold overflow-hidden flex-shrink-0'>
-                            {review.user?.profileImage ? (
-                              <img
-                                src={review.user.profileImage}
-                                alt={review.user.fullName}
-                                className='w-full h-full object-cover'
-                              />
-                            ) : (
-                              review.user?.fullName?.charAt(0).toUpperCase() ||
-                              'U'
-                            )}
-                          </div>
-                          <div className='flex-1'>
-                            <div className='flex items-center gap-2 mb-1'>
-                              <span className='font-semibold text-gray-900'>
-                                {review.user?.fullName || 'Anonymous'}
-                              </span>
-                              <StarRating rating={review.rating} size='sm' />
-                            </div>
-                            {review.comment && (
-                              <p className='text-gray-600'>{review.comment}</p>
-                            )}
-                            <span className='text-xs text-gray-400 mt-2 block'>
-                              {new Date(review.createdAt).toLocaleDateString(
-                                'en-US',
-                                {
-                                  month: 'long',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                }
-                              )}
-                            </span>
-                          </div>
-                        </div>
+          {/* Right Column - Operating Hours + Mini Map */}
+          <div className='lg:col-span-1'>
+            <div className='sticky top-24 space-y-0'>
+              {venue.operatingHours && venue.operatingHours.length > 0 && (
+                <div className='bg-white rounded-xl p-6 shadow-soft'>
+                  <h2 className='text-lg font-bold text-gray-900 mb-4'>
+                    Operating Hours
+                  </h2>
+                  <div className='divide-y divide-gray-100'>
+                    {venue.operatingHours.map((hours) => (
+                      <div key={hours.id} className='flex justify-between py-3'>
+                        <span className='text-gray-600 text-sm'>
+                          {dayNames[hours.dayOfWeek]}
+                        </span>
+                        {hours.isClosed ? (
+                          <span className='text-red-500 text-sm font-medium'>
+                            Closed
+                          </span>
+                        ) : (
+                          <span className='text-gray-900 text-sm font-medium'>
+                            {formatTime(hours.openingTime)} -{' '}
+                            {formatTime(hours.closingTime)}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
 
-                  {/* Pagination */}
-                  {reviewsPagination.pages > 1 && (
-                    <div className='flex justify-center gap-2 mt-6'>
-                      <button
-                        onClick={() =>
-                          setReviewsPage((p) => Math.max(1, p - 1))
-                        }
-                        disabled={reviewsPage === 1}
-                        className='px-3 py-1 border rounded disabled:opacity-50'
-                      >
-                        Previous
-                      </button>
-                      <span className='px-3 py-1 text-gray-600'>
-                        {reviewsPage} of {reviewsPagination.pages}
-                      </span>
-                      <button
-                        onClick={() =>
-                          setReviewsPage((p) =>
-                            Math.min(reviewsPagination.pages, p + 1)
-                          )
-                        }
-                        disabled={reviewsPage === reviewsPagination.pages}
-                        className='px-3 py-1 border rounded disabled:opacity-50'
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className='text-gray-500 text-center py-8'>
-                  No reviews yet. Be the first to review!
-                </p>
+              {/* Mini Map — only shown when coordinates are available */}
+              {venue.latitude && venue.longitude && (
+                <VenueMiniMap
+                  lat={Number(venue.latitude)}
+                  lng={Number(venue.longitude)}
+                  name={venue.name}
+                  address={`${venue.address}${venue.city ? ', ' + venue.city : ''}`}
+                />
               )}
             </div>
-          </div>
-
-          {/* Right Column - Operating Hours */}
-          <div className='lg:col-span-1'>
-            {venue.operatingHours && venue.operatingHours.length > 0 && (
-              <div className='bg-white rounded-xl p-6 shadow-soft sticky top-24'>
-                <h2 className='text-lg font-bold text-gray-900 mb-4'>
-                  Operating Hours
-                </h2>
-                <div className='divide-y divide-gray-100'>
-                  {venue.operatingHours.map((hours) => (
-                    <div key={hours.id} className='flex justify-between py-3'>
-                      <span className='text-gray-600 text-sm'>
-                        {dayNames[hours.dayOfWeek]}
-                      </span>
-                      {hours.isClosed ? (
-                        <span className='text-red-500 text-sm font-medium'>
-                          Closed
-                        </span>
-                      ) : (
-                        <span className='text-gray-900 text-sm font-medium'>
-                          {formatTime(hours.openingTime)} -{' '}
-                          {formatTime(hours.closingTime)}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </main>

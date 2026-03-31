@@ -215,6 +215,321 @@ const getOrderById = async (req, res) => {
     }
 };
 
+// Update user's own order (e.g. shipping address or cancel if pending)
+// PUT /api/orders/my-orders/:id
+const updateMyOrder = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+        const { shippingAddress, status } = req.body;
+
+        const existingOrder = await prisma.order.findUnique({
+            where: { id },
+            include: { items: true }
+        });
+
+        if (!existingOrder) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        if (existingOrder.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to update this order'
+            });
+        }
+
+        if (existingOrder.status !== 'pending') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only pending orders can be modified'
+            });
+        }
+
+        // Only allow changing status to cancelled
+        if (status && status !== 'cancelled') {
+            return res.status(400).json({
+                success: false,
+                message: 'Users can only cancel their orders'
+            });
+        }
+
+        const updateData = {};
+        if (shippingAddress) updateData.shippingAddress = shippingAddress;
+        if (status === 'cancelled') updateData.status = 'cancelled';
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid data provided to update'
+            });
+        }
+
+        // If cancelling, restore stock
+        if (updateData.status === 'cancelled') {
+            await prisma.$transaction(async (tx) => {
+                const updatedOrder = await tx.order.update({
+                    where: { id },
+                    data: updateData
+                });
+
+                for (const item of existingOrder.items) {
+                    await tx.product.update({
+                        where: { id: item.productId },
+                        data: { stock: { increment: item.quantity } }
+                    });
+                }
+                return updatedOrder;
+            });
+
+            return res.json({
+                success: true,
+                message: 'Order cancelled successfully'
+            });
+        }
+
+        // Just update shipping address
+        const updatedOrder = await prisma.order.update({
+            where: { id },
+            data: updateData
+        });
+
+        res.json({
+            success: true,
+            message: 'Order updated successfully',
+            data: { order: updatedOrder }
+        });
+
+    } catch (error) {
+        console.error('Update my order error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update order'
+        });
+    }
+};
+
+
+// ============================================
+// OPERATOR ENDPOINTS
+// ============================================
+
+// Get orders containing items from this operator
+// GET /api/orders/operator/all
+const getOperatorOrders = async (req, res) => {
+    try {
+        const sellerId = req.user.id;
+        const { status, page = 1, limit = 20 } = req.query;
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        const where = {
+            items: {
+                some: {
+                    product: {
+                        sellerId
+                    }
+                }
+            }
+        };
+
+        if (status) {
+            where.status = status;
+        }
+
+        const [orders, total] = await Promise.all([
+            prisma.order.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: parseInt(limit),
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            fullName: true,
+                            email: true,
+                            phone: true
+                        }
+                    },
+                    items: {
+                        include: {
+                            product: {
+                                select: { id: true, name: true, imageUrl: true, sellerId: true }
+                            }
+                        }
+                    }
+                }
+            }),
+            prisma.order.count({ where })
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                orders,
+                pagination: {
+                    total,
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    totalPages: Math.ceil(total / parseInt(limit))
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Get operator orders error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve operator orders'
+        });
+    }
+};
+
+// Get specific order details for operator
+// GET /api/orders/operator/:id
+const getOperatorOrderById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const sellerId = req.user.id;
+
+        const order = await prisma.order.findFirst({
+            where: {
+                id,
+                items: {
+                    some: {
+                        product: {
+                            sellerId
+                        }
+                    }
+                }
+            },
+            include: {
+                items: {
+                    include: {
+                        product: {
+                            select: {
+                                id: true,
+                                name: true,
+                                imageUrl: true,
+                                sellerId: true,
+                                price: true,
+                                category: true
+                            }
+                        }
+                    }
+                },
+                user: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        email: true,
+                        phone: true
+                    }
+                }
+            }
+        });
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found or unauthorized'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: { order }
+        });
+
+    } catch (error) {
+        console.error('Get operator order by ID error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve order details'
+        });
+    }
+};
+
+// Update order status (Operator only for orders containing their products)
+// PUT /api/orders/operator/:id/status
+const updateOperatorOrderStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        const sellerId = req.user.id;
+
+        const existingOrder = await prisma.order.findFirst({
+            where: {
+                id,
+                items: {
+                    some: {
+                        product: {
+                            sellerId
+                        }
+                    }
+                }
+            },
+            include: { items: true }
+        });
+
+        if (!existingOrder) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found or unauthorized'
+            });
+        }
+
+        // If order is cancelled, optionally restore stock
+        if (status === 'cancelled' && existingOrder.status !== 'cancelled') {
+            await prisma.$transaction(async (tx) => {
+                // Update status
+                const updatedOrder = await tx.order.update({
+                    where: { id },
+                    data: { status }
+                });
+
+                // Restore stock
+                for (const item of existingOrder.items) {
+                    await tx.product.update({
+                        where: { id: item.productId },
+                        data: {
+                            stock: { increment: item.quantity }
+                        }
+                    });
+                }
+                return updatedOrder;
+            });
+
+            return res.json({
+                success: true,
+                message: 'Order cancelled and stock restored successfully'
+            });
+        }
+
+        // Normal status update
+        const updatedOrder = await prisma.order.update({
+            where: { id },
+            data: { status }
+        });
+
+        res.json({
+            success: true,
+            message: 'Order status updated successfully',
+            data: { order: updatedOrder }
+        });
+
+    } catch (error) {
+        console.error('Update operator order status error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update order status'
+        });
+    }
+};
 
 // ============================================
 // ADMIN ENDPOINTS
@@ -352,6 +667,10 @@ module.exports = {
     createOrder,
     getUserOrders,
     getOrderById,
+    updateMyOrder,
     getAllOrdersAdmin,
-    updateOrderStatus
+    updateOrderStatus,
+    getOperatorOrders,
+    getOperatorOrderById,
+    updateOperatorOrderStatus
 };
