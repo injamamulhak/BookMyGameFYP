@@ -16,6 +16,8 @@ import ShopPage from './pages/Shop/ShopPage';
 import ProductDetail from './pages/Shop/ProductDetail';
 import Checkout from './pages/Shop/Checkout';
 import TrainingVideos from './pages/Training/TrainingVideos';
+import ContactPage from './pages/Public/ContactPage';
+import FAQPage from './pages/Public/FAQPage';
 
 // User imports
 import UserSettings from './pages/User/UserSettings';
@@ -63,6 +65,7 @@ import AdminProducts from './pages/Admin/AdminProducts';
 import SellerRequests from './pages/Admin/SellerRequests';
 import AdminTrainingVideos from './pages/Admin/AdminTrainingVideos';
 import FlaggedReviews from './pages/Admin/FlaggedReviews';
+import AdminContacts from './pages/Admin/AdminContacts';
 
 function App() {
     return (
@@ -86,6 +89,8 @@ function App() {
                         <Route path="/shop" element={<ShopPage />} />
                         <Route path="/shop/:id" element={<ProductDetail />} />
                         <Route path="/training" element={<TrainingVideos />} />
+                        <Route path="/contact" element={<ContactPage />} />
+                        <Route path="/faq" element={<FAQPage />} />
 
                         {/* User Settings Route - All authenticated users */}
                         <Route
@@ -228,6 +233,7 @@ function App() {
                             <Route path="seller-requests" element={<SellerRequests />} />
                             <Route path="training" element={<AdminTrainingVideos />} />
                             <Route path="reviews/flagged" element={<FlaggedReviews />} />
+                            <Route path="contacts" element={<AdminContacts />} />
                         </Route>
                     </Routes>
                 </div>

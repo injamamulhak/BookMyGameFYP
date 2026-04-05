@@ -53,6 +53,7 @@ app.use('/api/products', require('./routes/product.routes'));
 app.use('/api/orders', require('./routes/order.routes'));
 app.use('/api/training', require('./routes/training.routes'));
 app.use('/api/notifications', require('./routes/notification.routes'));
+app.use('/api/contact', require('./routes/contact.routes'));
 
 // 404 handler
 app.use((req, res) => {

@@ -545,3 +545,22 @@ model Notification {
   @@index([createdAt(sort: Desc)])
   @@map("notifications")
 }
+
+// ============================================
+// CONTACT INQUIRIES
+// ============================================
+
+model ContactInquiry {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(255)
+  email     String   @db.VarChar(255)
+  subject   String   @db.VarChar(255)
+  message   String   @db.Text
+  status    String   @default("pending") @db.VarChar(50) // pending, resolved
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("contact_inquiries")
+}
