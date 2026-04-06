@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { getIo } = require('../socket');
 
 /**
  * Venue Controller
@@ -326,6 +327,34 @@ const createVenue = async (req, res) => {
             message: 'Venue created successfully. Pending admin approval.',
             data: venue,
         });
+
+        // Notify all admins about the new pending venue (fire-and-forget after response)
+        try {
+            const operator = await prisma.user.findUnique({
+                where: { id: operatorId },
+                select: { fullName: true },
+            });
+            const admins = await prisma.user.findMany({
+                where: { role: 'admin' },
+                select: { id: true },
+            });
+            for (const admin of admins) {
+                const notif = await prisma.notification.create({
+                    data: {
+                        userId: admin.id,
+                        type: 'new_venue_pending',
+                        title: 'New Venue Pending Review',
+                        message: `"${venue.name}" submitted by ${operator?.fullName || 'an operator'} is awaiting your approval.`,
+                        relatedEntityType: 'venue',
+                        relatedEntityId: venue.id,
+                        link: `/admin/venues/${venue.id}`,
+                    },
+                });
+                try { getIo().to(admin.id).emit('new_notification', notif); } catch (e) { /* ignore */ }
+            }
+        } catch (notifErr) {
+            console.error('Admin venue notification error:', notifErr);
+        }
     } catch (error) {
         console.error('Error creating venue:', error);
         res.status(500).json({

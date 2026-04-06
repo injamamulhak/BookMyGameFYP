@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 function SellerRequests() {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(null);
     const [message, setMessage] = useState({ type: '', text: '' });
+    const [confirmModal, setConfirmModal] = useState({ open: false, id: null, name: '' });
 
     useEffect(() => {
         fetchRequests();
@@ -37,8 +39,13 @@ function SellerRequests() {
         }
     };
 
-    const handleReject = async (id, name) => {
-        if (!window.confirm(`Are you sure you want to reject ${name}'s seller request?`)) return;
+    const handleReject = (id, name) => {
+        setConfirmModal({ open: true, id, name });
+    };
+
+    const confirmReject = async () => {
+        const { id, name } = confirmModal;
+        setConfirmModal({ open: false, id: null, name: '' });
         setActionLoading(id);
         try {
             await api.put(`/admin/seller-requests/${id}/reject`);
@@ -62,6 +69,15 @@ function SellerRequests() {
 
     return (
         <div>
+            <ConfirmModal
+                isOpen={confirmModal.open}
+                title={`Reject ${confirmModal.name}'s Seller Request?`}
+                message={`Are you sure you want to reject ${confirmModal.name}'s seller request? They will not be able to list products unless they reapply.`}
+                confirmText='Reject Request'
+                confirmVariant='danger'
+                onConfirm={confirmReject}
+                onCancel={() => setConfirmModal({ open: false, id: null, name: '' })}
+            />
             <div className="mb-8">
                 <h1 className="font-heading font-bold text-3xl text-gray-900">Seller Requests</h1>
                 <p className="text-gray-600 mt-1">

@@ -53,18 +53,20 @@ const createReply = async (req, res) => {
                 type: 'review_reply',
                 title: 'Operator Replied',
                 message: `The operator of ${review.venue.name} replied to your review.`,
-                relatedEntityType: 'review_reply',
-                relatedEntityId: reply.id,
+                relatedEntityType: 'venue',
+                relatedEntityId: review.venueId,
+                link: `/venues/${review.venueId}`,
             });
         } else if (userId === review.userId && review.venue.operatorId && review.venue.operatorId !== userId) {
             // User replied -> Notify Operator
             await createNotification({
                 userId: review.venue.operatorId,
                 type: 'review_reply',
-                title: 'Review Reply',
-                message: `A user replied on a review for your venue ${review.venue.name}.`,
-                relatedEntityType: 'review_reply',
-                relatedEntityId: reply.id,
+                title: 'User Replied to Review',
+                message: `A user added a reply to a review on "${review.venue.name}".`,
+                relatedEntityType: 'venue',
+                relatedEntityId: review.venueId,
+                link: '/operator/reviews',
             });
         }
 

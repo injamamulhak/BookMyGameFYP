@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { createNotification } = require('../models/notification.model');
+const { getIo } = require('../socket');
 
 /**
  * Review Controller
@@ -102,7 +103,7 @@ const createReview = async (req, res) => {
                     id: bookingId,
                     userId,
                     slot: { venueId },
-                    status: { in: ['confirmed', 'completed'] },
+                    status: 'confirmed',
                 },
             });
 
@@ -181,14 +182,16 @@ const createReview = async (req, res) => {
 
         // Notify operator about the new review
         if (venue.operatorId && venue.operatorId !== userId) {
-            await createNotification({
+            const notif = await createNotification({
                 userId: venue.operatorId,
                 type: 'new_review',
                 title: 'New Venue Review',
-                message: `Your venue ${venue.name} received a new ${rating}-star review.`,
+                message: `Your venue "${venue.name}" received a new ${rating}-star review.`,
                 relatedEntityType: 'review',
                 relatedEntityId: review.id,
+                link: '/operator/reviews',
             });
+            try { getIo().to(venue.operatorId).emit('new_notification', notif); } catch (e) { /* ignore */ }
         }
 
         res.status(201).json({
@@ -280,9 +283,10 @@ const updateReview = async (req, res) => {
                 userId: venueInfo.operatorId,
                 type: 'updated_review',
                 title: 'Review Updated',
-                message: `A user has updated their ${rating}-star review on your venue ${venueInfo.name}.`,
+                message: `A user has updated their ${rating}-star review on "${venueInfo.name}".`,
                 relatedEntityType: 'review',
                 relatedEntityId: updatedReview.id,
+                link: '/operator/reviews',
             });
         }
 
@@ -369,12 +373,12 @@ const canReviewVenue = async (req, res) => {
         const userId = req.user.id;
         const { venueId } = req.params;
 
-        // Check if user has any completed booking for this venue
+        // Check if user has any confirmed booking for this venue
         const completedBooking = await prisma.booking.findFirst({
             where: {
                 userId,
                 slot: { venueId },
-                status: { in: ['confirmed', 'completed'] },
+                status: 'confirmed',
             },
             orderBy: { createdAt: 'desc' },
         });

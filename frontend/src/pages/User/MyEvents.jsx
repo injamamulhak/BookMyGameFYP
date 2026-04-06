@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
+import toast from 'react-hot-toast';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 const EXPIRY_MINUTES = 5; // must match backend pendingPaymentCleaner.js
 
@@ -42,6 +44,7 @@ function MyEvents() {
     const [filter, setFilter] = useState('all');
     const [cancelling, setCancelling] = useState(null);
     const [retryingId, setRetryingId] = useState(null);
+    const [cancelModal, setCancelModal] = useState({ open: false, eventId: null });
 
     useEffect(() => {
         fetchRegistrations();
@@ -80,27 +83,27 @@ function MyEvents() {
             if (response.data.success && response.data.data.paymentUrl) {
                 window.location.href = response.data.data.paymentUrl;
             } else {
-                alert('Failed to initiate payment. Please try again.');
+                toast.error('Failed to initiate payment. Please try again.');
                 setRetryingId(null);
             }
         } catch (err) {
             const msg = err.response?.data?.message || 'Failed to initiate payment';
-            alert(msg);
+            toast.error(msg);
             if (err.response?.status === 404) fetchRegistrations();
             setRetryingId(null);
         }
     };
 
     const handleCancelRegistration = async (eventId) => {
-        if (!confirm('Are you sure you want to cancel your registration?')) return;
-
+        setCancelModal({ open: false, eventId: null });
         try {
             setCancelling(eventId);
             await api.delete(`/events/${eventId}/register`);
+            toast.success('Registration cancelled successfully');
             fetchRegistrations();
         } catch (err) {
             console.error('Error cancelling:', err);
-            alert(err.response?.data?.message || 'Failed to cancel registration');
+            toast.error(err.response?.data?.message || 'Failed to cancel registration');
         } finally {
             setCancelling(null);
         }
@@ -125,6 +128,15 @@ function MyEvents() {
     return (
         <div className="min-h-screen bg-gray-50">
             <Header />
+            <ConfirmModal
+                isOpen={cancelModal.open}
+                title='Cancel Event Registration?'
+                message='Are you sure you want to cancel your registration? This action cannot be undone.'
+                confirmText='Cancel Registration'
+                confirmVariant='danger'
+                onConfirm={() => cancelModal.eventId && handleCancelRegistration(cancelModal.eventId)}
+                onCancel={() => setCancelModal({ open: false, eventId: null })}
+            />
 
             <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="mb-8">
@@ -288,7 +300,7 @@ function MyEvents() {
                                                 </Link>
                                                 {!isPendingPayment && !isPast(reg.event.startDate) && (
                                                     <button
-                                                        onClick={() => handleCancelRegistration(reg.event.id)}
+                                                        onClick={() => setCancelModal({ open: true, eventId: reg.event.id })}
                                                         disabled={cancelling === reg.event.id}
                                                         className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium disabled:opacity-50"
                                                     >

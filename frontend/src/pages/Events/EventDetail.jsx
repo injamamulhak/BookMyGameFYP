@@ -5,6 +5,7 @@ import api from '../../services/api'
 import { formatTime, formatDateLong } from '../../utils/timeUtils'
 import Header from '../../components/layout/Header'
 import Footer from '../../components/layout/Footer'
+import ConfirmModal from '../../components/common/ConfirmModal'
 
 function EventDetail() {
   const { id } = useParams()
@@ -16,6 +17,7 @@ function EventDetail() {
   const [error, setError] = useState(null)
   const [registering, setRegistering] = useState(false)
   const [registerError, setRegisterError] = useState(null)
+  const [cancelModal, setCancelModal] = useState(false)
 
   useEffect(() => {
     fetchEvent()
@@ -84,8 +86,7 @@ function EventDetail() {
   }
 
   const handleCancelRegistration = async () => {
-    if (!confirm('Are you sure you want to cancel your registration?')) return
-
+    setCancelModal(false)
     try {
       setRegistering(true)
       await api.delete(`/events/${id}/register`)
@@ -171,6 +172,15 @@ function EventDetail() {
   return (
     <div className='min-h-screen bg-gray-50'>
       <Header />
+      <ConfirmModal
+        isOpen={cancelModal}
+        title='Cancel Event Registration?'
+        message='Are you sure you want to cancel your registration? This action cannot be undone.'
+        confirmText='Cancel Registration'
+        confirmVariant='danger'
+        onConfirm={handleCancelRegistration}
+        onCancel={() => setCancelModal(false)}
+      />
 
       {/* Hero Section */}
       <div className='relative h-64 md:h-80 lg:h-96 bg-gray-900'>
@@ -437,7 +447,7 @@ function EventDetail() {
                     )}
                   </div>
                   <button
-                    onClick={handleCancelRegistration}
+                    onClick={() => setCancelModal(true)}
                     disabled={registering}
                     className='w-full py-3 px-4 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50'
                   >
@@ -476,7 +486,7 @@ function EventDetail() {
                     {registering ? 'Redirecting to payment...' : 'Pay with Khalti'}
                   </button>
                   <button
-                    onClick={handleCancelRegistration}
+                    onClick={() => setCancelModal(true)}
                     disabled={registering}
                     className='w-full py-3 px-4 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50'
                   >

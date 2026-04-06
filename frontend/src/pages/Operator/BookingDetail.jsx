@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { formatTime } from '../../utils/timeUtils';
+import toast from 'react-hot-toast';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 /**
  * BookingDetail - Detailed view of a single booking for operators
@@ -16,6 +18,7 @@ function BookingDetail() {
     const [actionLoading, setActionLoading] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     useEffect(() => {
         fetchBooking();
@@ -37,17 +40,17 @@ function BookingDetail() {
     };
 
     const handleConfirmBooking = async () => {
-        if (!confirm('Are you sure you want to confirm this booking? The customer will be notified.')) return;
-
+        setShowConfirmModal(false);
         try {
             setActionLoading(true);
             const response = await api.put(`/bookings/operator/${id}/confirm`);
             if (response.data.success) {
                 setBooking(prev => ({ ...prev, status: 'confirmed' }));
+                toast.success('Booking confirmed! Customer has been notified.');
             }
         } catch (err) {
             console.error('Error confirming booking:', err);
-            alert(err.response?.data?.message || 'Failed to confirm booking');
+            toast.error(err.response?.data?.message || 'Failed to confirm booking');
         } finally {
             setActionLoading(false);
         }
@@ -64,7 +67,7 @@ function BookingDetail() {
             }
         } catch (err) {
             console.error('Error cancelling booking:', err);
-            alert(err.response?.data?.message || 'Failed to cancel booking');
+            toast.error(err.response?.data?.message || 'Failed to cancel booking');
         } finally {
             setActionLoading(false);
         }
@@ -144,6 +147,15 @@ function BookingDetail() {
 
     return (
         <div className="space-y-6">
+            <ConfirmModal
+                isOpen={showConfirmModal}
+                title='Confirm Booking?'
+                message='Are you sure you want to confirm this booking? The customer will be notified.'
+                confirmText='Confirm Booking'
+                confirmVariant='primary'
+                onConfirm={handleConfirmBooking}
+                onCancel={() => setShowConfirmModal(false)}
+            />
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center space-x-4">

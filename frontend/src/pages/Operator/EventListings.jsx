@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import toast from 'react-hot-toast';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 function EventListings() {
     const [events, setEvents] = useState([]);
@@ -8,6 +10,7 @@ function EventListings() {
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all');
     const [deleting, setDeleting] = useState(null);
+    const [confirmModal, setConfirmModal] = useState({ open: false, eventId: null });
 
     useEffect(() => {
         fetchEvents();
@@ -29,16 +32,21 @@ function EventListings() {
         }
     };
 
-    const handleDelete = async (eventId) => {
-        if (!confirm('Are you sure you want to delete this event? This will also remove all registrations.')) return;
+    const handleDelete = (eventId) => {
+        setConfirmModal({ open: true, eventId });
+    };
 
+    const confirmDelete = async () => {
+        const { eventId } = confirmModal;
+        setConfirmModal({ open: false, eventId: null });
         try {
             setDeleting(eventId);
             await api.delete(`/events/${eventId}`);
+            toast.success('Event deleted successfully');
             fetchEvents();
         } catch (err) {
             console.error('Error deleting event:', err);
-            alert(err.response?.data?.message || 'Failed to delete event');
+            toast.error(err.response?.data?.message || 'Failed to delete event');
         } finally {
             setDeleting(null);
         }
@@ -70,6 +78,15 @@ function EventListings() {
 
     return (
         <div className="space-y-6">
+            <ConfirmModal
+                isOpen={confirmModal.open}
+                title='Delete Event?'
+                message='Are you sure you want to delete this event? This will also remove all registrations and cannot be undone.'
+                confirmText='Delete Event'
+                confirmVariant='danger'
+                onConfirm={confirmDelete}
+                onCancel={() => setConfirmModal({ open: false, eventId: null })}
+            />
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>

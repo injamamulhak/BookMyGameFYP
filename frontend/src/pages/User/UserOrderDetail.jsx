@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import Header from '../../components/layout/Header';
 import orderService from '../../services/orderService';
 import toast from 'react-hot-toast';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 function UserOrderDetail() {
     const { id } = useParams();
@@ -15,6 +16,7 @@ function UserOrderDetail() {
     const [isEditingAddress, setIsEditingAddress] = useState(false);
     const [editedAddress, setEditedAddress] = useState("");
     const [updateLoading, setUpdateLoading] = useState(false);
+    const [cancelModal, setCancelModal] = useState(false);
 
     useEffect(() => {
         fetchOrderDetails();
@@ -63,10 +65,7 @@ function UserOrderDetail() {
     };
 
     const handleCancelOrder = async () => {
-        if (!window.confirm('Are you sure you want to cancel this order? This action cannot be undone.')) {
-            return;
-        }
-
+        setCancelModal(false);
         try {
             setUpdateLoading(true);
             const res = await orderService.updateMyOrder(id, { status: 'cancelled' });
@@ -125,6 +124,15 @@ function UserOrderDetail() {
     return (
         <div className="min-h-screen bg-gray-50 pb-12">
             <Header />
+            <ConfirmModal
+                isOpen={cancelModal}
+                title='Cancel Order?'
+                message='Are you sure you want to cancel this order? This action cannot be undone.'
+                confirmText='Cancel Order'
+                confirmVariant='danger'
+                onConfirm={handleCancelOrder}
+                onCancel={() => setCancelModal(false)}
+            />
             <div className="container-custom mt-8">
                 {/* Top Navigation */}
                 <div className="mb-6">
@@ -305,7 +313,7 @@ function UserOrderDetail() {
                             <div className="flex flex-col sm:flex-row gap-3">
                                 {order.status === 'pending' && (
                                     <button 
-                                        onClick={handleCancelOrder} 
+                                        onClick={() => setCancelModal(true)} 
                                         disabled={updateLoading}
                                         className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-transparent hover:border-red-200 disabled:opacity-50 flex justify-center items-center"
                                     >

@@ -4,6 +4,8 @@ import api from '../../services/api'
 import { formatTime } from '../../utils/timeUtils'
 import Header from '../../components/layout/Header'
 import Footer from '../../components/layout/Footer'
+import toast from 'react-hot-toast'
+import ConfirmModal from '../../components/common/ConfirmModal'
 
 const EXPIRY_MINUTES = 5 // must match backend pendingPaymentCleaner.js
 
@@ -50,6 +52,7 @@ function MyBookings() {
   const [filter, setFilter] = useState('all')
   const [cancellingId, setCancellingId] = useState(null)
   const [retryingId, setRetryingId] = useState(null)
+  const [cancelModal, setCancelModal] = useState({ open: false, booking: null, refundMsg: '' })
 
   useEffect(() => {
     fetchBookings()
@@ -87,21 +90,38 @@ function MyBookings() {
       if (response.data.success && response.data.data.paymentUrl) {
         window.location.href = response.data.data.paymentUrl
       } else {
-        alert('Failed to initiate payment. Please try again.')
+        toast.error('Failed to initiate payment. Please try again.')
         setRetryingId(null)
       }
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to initiate payment'
-      alert(msg)
+      toast.error(msg)
       if (err.response?.status === 400) fetchBookings()
       setRetryingId(null)
     }
   }
 
-  const handleCancelBooking = async (bookingId, bookingDate, startTime, paidAmount) => {
+  const handleCancelBooking = async (bookingId) => {
+    setCancelModal({ open: false, booking: null, refundMsg: '' })
+    setCancellingId(bookingId)
+    try {
+      const response = await api.put(`/bookings/${bookingId}/cancel`)
+      if (response.data.success) {
+        setBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, status: 'cancelled' } : b))
+        toast.success(response.data.data?.refundInfo?.message || 'Booking cancelled successfully')
+      }
+    } catch (err) {
+      console.error('Error cancelling booking:', err)
+      toast.error(err.response?.data?.message || 'Failed to cancel booking')
+    } finally {
+      setCancellingId(null)
+    }
+  }
+
+  const openCancelModal = (booking) => {
     const now = new Date()
-    const slotDate = new Date(bookingDate)
-    const slotStart = new Date(startTime)
+    const slotDate = new Date(booking.slot?.date || booking.bookingDate)
+    const slotStart = new Date(booking.slot?.startTime)
     const startDateTime = new Date(
       Date.UTC(
         slotDate.getUTCFullYear(), slotDate.getUTCMonth(), slotDate.getUTCDate(),
@@ -109,25 +129,10 @@ function MyBookings() {
       ),
     )
     const hoursUntilStart = (startDateTime - now) / (1000 * 60 * 60)
-    let refundMsg = 'Refund: 0% (less than 6 hours remaining)'
-    if (hoursUntilStart > 24) refundMsg = `Refund: 100% (Rs. ${paidAmount})`
-    else if (hoursUntilStart > 6) refundMsg = `Refund: 50% (Rs. ${paidAmount / 2})`
-
-    if (!window.confirm(`Are you sure you want to cancel this booking?\n\n${refundMsg}`)) return
-
-    setCancellingId(bookingId)
-    try {
-      const response = await api.put(`/bookings/${bookingId}/cancel`)
-      if (response.data.success) {
-        setBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, status: 'cancelled' } : b))
-        alert(response.data.data?.refundInfo?.message || 'Booking cancelled successfully')
-      }
-    } catch (err) {
-      console.error('Error cancelling booking:', err)
-      alert(err.response?.data?.message || 'Failed to cancel booking')
-    } finally {
-      setCancellingId(null)
-    }
+    let refundMsg = 'Refund: 0% — less than 6 hours remaining until the game.'
+    if (hoursUntilStart > 24) refundMsg = `Refund: 100% — Rs. ${booking.totalPrice} will be refunded.`
+    else if (hoursUntilStart > 6) refundMsg = `Refund: 50% — Rs. ${booking.totalPrice / 2} will be refunded.`
+    setCancelModal({ open: true, booking, refundMsg })
   }
 
   const formatDate = (dateString) =>
@@ -182,6 +187,15 @@ function MyBookings() {
   return (
     <div className='min-h-screen bg-gray-50'>
       <Header />
+      <ConfirmModal
+        isOpen={cancelModal.open}
+        title='Cancel Booking?'
+        message={`Are you sure you want to cancel this booking?\n\n${cancelModal.refundMsg}`}
+        confirmText='Cancel Booking'
+        confirmVariant='danger'
+        onConfirm={() => cancelModal.booking && handleCancelBooking(cancelModal.booking.id)}
+        onCancel={() => setCancelModal({ open: false, booking: null, refundMsg: '' })}
+      />
 
       <main className='container-custom py-6'>
         <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6'>
@@ -339,14 +353,7 @@ function MyBookings() {
 
                         {canCancelBooking(booking) && (
                           <button
-                            onClick={() =>
-                              handleCancelBooking(
-                                booking.id,
-                                booking.slot?.date || booking.bookingDate,
-                                booking.slot?.startTime,
-                                booking.totalPrice,
-                              )
-                            }
+                            onClick={() => openCancelModal(booking)}
                             disabled={cancellingId === booking.id}
                             className='px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors disabled:opacity-50 border border-transparent hover:border-red-100'
                           >

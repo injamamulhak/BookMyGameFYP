@@ -97,7 +97,7 @@ class AuthService {
       .sendVerificationEmail(email, fullName, verificationToken)
       .catch((err) => {
         console.error(
-          '⚠️  Failed to send verification email for user:',
+          'Failed to send verification email for user:',
           email,
           err.message,
         )

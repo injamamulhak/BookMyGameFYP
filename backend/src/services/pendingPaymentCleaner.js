@@ -72,6 +72,7 @@ const cleanupPendingPayments = async () => {
                             message: `Your held slot at ${booking.slot.venue.name} on ${new Date(booking.slot.date).toDateString()} was released because payment was not completed within ${EXPIRY_MINUTES} minutes. The slot is now available for others to book.`,
                             relatedEntityType: 'venue',
                             relatedEntityId: booking.slot.venue.id,
+                            link: '/my-bookings',
                         },
                     });
 
@@ -144,6 +145,7 @@ const cleanupPendingPayments = async () => {
                             message: `Your registration for "${reg.event.title}" was cancelled because payment of Rs. ${parseFloat(reg.event.registrationFee).toLocaleString()} was not completed within ${EXPIRY_MINUTES} minutes. You can register again anytime.`,
                             relatedEntityType: 'event',
                             relatedEntityId: reg.event.id,
+                            link: '/my-events',
                         },
                     });
 

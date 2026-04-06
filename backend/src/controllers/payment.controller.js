@@ -391,6 +391,7 @@ const verifyKhaltiPayment = async (req, res) => {
                             message: `Your payment for "${reg.event.title}" is confirmed. Check your email for the receipt.`,
                             relatedEntityType: 'event',
                             relatedEntityId: reg.event.id,
+                            link: '/my-events',
                         },
                     });
                     try { getIo().to(reg.userId).emit('new_notification', userNotif); } catch (e) { /* ignore */ }
@@ -404,6 +405,7 @@ const verifyKhaltiPayment = async (req, res) => {
                             message: `${reg.user.fullName} paid and registered for "${reg.event.title}".`,
                             relatedEntityType: 'event',
                             relatedEntityId: reg.event.id,
+                            link: `/operator/events/${reg.event.id}`,
                         },
                     });
                     try { getIo().to(reg.event.venue.operatorId).emit('new_notification', opNotif); } catch (e) { /* ignore */ }
@@ -453,6 +455,7 @@ const verifyKhaltiPayment = async (req, res) => {
                         message: `Your payment of Rs. ${booking.totalPrice} for ${booking.slot.venue.name} has been confirmed. Check your email for the receipt.`,
                         relatedEntityType: 'booking',
                         relatedEntityId: booking.id,
+                        link: `/my-bookings/${booking.id}`,
                     },
                 });
                 try { getIo().to(booking.userId).emit('new_notification', userNotif); } catch (e) { /* ignore */ }
@@ -466,6 +469,7 @@ const verifyKhaltiPayment = async (req, res) => {
                         message: `${booking.user.fullName} has confirmed a booking at ${booking.slot.venue.name}. Payment: Rs. ${booking.totalPrice}.`,
                         relatedEntityType: 'booking',
                         relatedEntityId: booking.id,
+                        link: `/operator/bookings/${booking.id}`,
                     },
                 });
                 try { getIo().to(booking.slot.venue.operatorId).emit('new_notification', opNotif); } catch (e) { /* ignore */ }

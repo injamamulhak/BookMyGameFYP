@@ -7,6 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
 import VenueSlotCalendar from '../../components/common/VenueSlotCalendar';
+import toast from 'react-hot-toast';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 const EXPIRY_MINUTES = 5; // must match backend pendingPaymentCleaner.js
 
@@ -54,6 +56,9 @@ function BookingPage() {
     const [pendingBookings, setPendingBookings] = useState([]);
     const [retryingId, setRetryingId] = useState(null);
 
+    // Cart switch confirmation modal
+    const [cartSwitchModal, setCartSwitchModal] = useState({ open: false, parsedCart: null });
+
     // Cart state - array of { date, slot, venueId, venueName, sportName, venueImage, dateDisplay }
     const [cart, setCart] = useState([]);
     
@@ -76,16 +81,11 @@ function BookingPage() {
                     } else {
                         // Lock expired, clear
                         localStorage.removeItem(CART_KEY);
-                        alert('Your reservation time expired. Please select slots again.');
+                        toast.error('Your reservation time expired. Please select slots again.');
                     }
                 } else if (parsed.venueId !== venueId && parsed.items?.length > 0) {
-                    if (window.confirm(`You have ${parsed.items.length} slot(s) in your cart from "${parsed.venueName}". Switching venue will clear your cart. Continue?`)) {
-                        localStorage.removeItem(CART_KEY);
-                        setCart([]);
-                    } else {
-                        navigate(`/booking/${parsed.venueId}`);
-                        return;
-                    }
+                    // Ask user if they want to switch venue (clear cart)
+                    setCartSwitchModal({ open: true, parsedCart: parsed });
                 }
             } catch (e) {
                 console.error('Error loading cart:', e);
@@ -144,7 +144,7 @@ function BookingPage() {
                     clearInterval(timerRef.current);
                     setTimeLeft(0);
                     clearCart();
-                    alert('Reservation time expired. Slotes have been released.');
+                    toast.error('Reservation time expired. Slots have been released.');
                 } else {
                     setTimeLeft(diff);
                 }
@@ -227,9 +227,9 @@ function BookingPage() {
                 }
             } catch (err) {
                 if (err.response?.status === 409) {
-                    alert(err.response.data.message);
+                    toast.error(err.response.data.message);
                 } else {
-                    alert('Failed to lock slot. It may be unavailable.');
+                    toast.error('Failed to lock slot. It may be unavailable.');
                 }
             }
         }
@@ -285,12 +285,12 @@ function BookingPage() {
             if (response.data.success && response.data.data.paymentUrl) {
                 window.location.href = response.data.data.paymentUrl;
             } else {
-                alert('Failed to initiate payment. Please try again.');
+                toast.error('Failed to initiate payment. Please try again.');
                 setRetryingId(null);
             }
         } catch (err) {
             const msg = err.response?.data?.message || 'Failed to initiate payment';
-            alert(msg);
+            toast.error(msg);
             if (err.response?.status === 400) {
                 setPendingBookings((prev) => prev.filter((b) => b.id !== booking.id));
             }
@@ -361,6 +361,24 @@ function BookingPage() {
     return (
         <div className="min-h-screen bg-gray-50">
             <Header />
+            <ConfirmModal
+                isOpen={cartSwitchModal.open}
+                title='Switch Venue?'
+                message={`You have ${cartSwitchModal.parsedCart?.items?.length || 0} slot(s) in your cart from "${cartSwitchModal.parsedCart?.venueName}". Switching venue will clear your cart. Continue?`}
+                confirmText='Switch Venue'
+                confirmVariant='warning'
+                onConfirm={() => {
+                    localStorage.removeItem(CART_KEY);
+                    setCart([]);
+                    setCartSwitchModal({ open: false, parsedCart: null });
+                }}
+                onCancel={() => {
+                    setCartSwitchModal({ open: false, parsedCart: null });
+                    if (cartSwitchModal.parsedCart?.venueId) {
+                        navigate(`/booking/${cartSwitchModal.parsedCart.venueId}`);
+                    }
+                }}
+            />
 
             <main className="container-custom py-6">
                 {/* Breadcrumb */}

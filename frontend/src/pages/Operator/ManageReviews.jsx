@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { FaStar, FaFlag, FaReply, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 const StarDisplay = ({ rating }) => (
     <div className="flex items-center gap-0.5">
@@ -23,6 +24,7 @@ function ManageReviews() {
     const [replyingTo, setReplyingTo] = useState(null); // reviewId being replied to
     const [replyText, setReplyText] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({ open: false, replyId: null });
 
     const fetchReviews = useCallback(async () => {
         try {
@@ -84,8 +86,13 @@ function ManageReviews() {
         }
     };
 
-    const handleDeleteReply = async (replyId) => {
-        if (!window.confirm('Delete this reply?')) return;
+    const handleDeleteReply = (replyId) => {
+        setConfirmModal({ open: true, replyId });
+    };
+
+    const confirmDeleteReply = async () => {
+        const { replyId } = confirmModal;
+        setConfirmModal({ open: false, replyId: null });
         try {
             await api.delete(`/reviews/replies/${replyId}`);
             toast.success('Reply deleted');
@@ -114,6 +121,15 @@ function ManageReviews() {
 
     return (
         <div className="space-y-6">
+            <ConfirmModal
+                isOpen={confirmModal.open}
+                title='Delete Reply?'
+                message='Are you sure you want to delete this reply? This action cannot be undone.'
+                confirmText='Delete Reply'
+                confirmVariant='danger'
+                onConfirm={confirmDeleteReply}
+                onCancel={() => setConfirmModal({ open: false, replyId: null })}
+            />
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>

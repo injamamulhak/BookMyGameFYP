@@ -262,7 +262,8 @@ const approveVenue = async (req, res) => {
                 title: 'Venue Approved',
                 message: `Your venue "${venue.name}" has been approved and is now live!`,
                 relatedEntityType: 'venue',
-                relatedEntityId: venue.id
+                relatedEntityId: venue.id,
+                link: '/operator/venues',
             }
         });
 
@@ -334,7 +335,8 @@ const rejectVenue = async (req, res) => {
                 title: 'Venue Rejected',
                 message: `Your venue "${venue.name}" was rejected. Reason: ${reason}`,
                 relatedEntityType: 'venue',
-                relatedEntityId: venue.id
+                relatedEntityId: venue.id,
+                link: '/operator/venues',
             }
         });
 
@@ -604,6 +606,7 @@ const approveSellerRequest = async (req, res) => {
                 type: 'seller_approved',
                 title: 'Seller Request Approved',
                 message: 'You are now approved to sell products on BookMyGame!',
+                link: '/operator/products',
             }
         });
 
@@ -740,6 +743,7 @@ const approveVideoUploaderRequest = async (req, res) => {
                 type: 'video_uploader_approved',
                 title: 'Video Upload Access Granted',
                 message: 'You are now approved to upload training videos on BookMyGame!',
+                link: '/operator/training',
             },
         });
 

@@ -211,7 +211,8 @@ const confirmBooking = async (req, res) => {
                 title: 'Booking Confirmed',
                 message: `Your booking at ${updatedBooking.slot.venue.name} has been confirmed.`,
                 relatedEntityType: 'booking',
-                relatedEntityId: booking.id
+                relatedEntityId: booking.id,
+                link: `/my-bookings/${booking.id}`,
             }
         });
 
@@ -297,7 +298,8 @@ const cancelBooking = async (req, res) => {
                 title: 'Booking Cancelled',
                 message: `Your booking at ${updatedBooking.slot.venue.name} was cancelled by the operator.`,
                 relatedEntityType: 'booking',
-                relatedEntityId: booking.id
+                relatedEntityId: booking.id,
+                link: `/my-bookings/${booking.id}`,
             }
         });
 
@@ -749,6 +751,7 @@ const cancelUserBooking = async (req, res) => {
                 message: `Your booking at ${booking.slot.venue.name} on ${slotDate.toDateString()} has been cancelled. ${refundMsg}`,
                 relatedEntityType: 'booking',
                 relatedEntityId: id,
+                link: `/my-bookings/${id}`,
             },
         });
         try { getIo().to(userId).emit('new_notification', userNotification); } catch (e) { /* ignore socket errors */ }
@@ -757,11 +760,12 @@ const cancelUserBooking = async (req, res) => {
         const opNotification = await prisma.notification.create({
             data: {
                 userId: booking.slot.venue.operatorId,
-                type: 'booking_cancelled',
+                type: 'booking_cancelled_by_user',
                 title: 'Booking Cancelled by User',
                 message: `${booking.user.fullName} has cancelled their booking at ${booking.slot.venue.name} on ${slotDate.toDateString()}.`,
                 relatedEntityType: 'booking',
                 relatedEntityId: id,
+                link: `/operator/bookings/${id}`,
             },
         });
         try { getIo().to(booking.slot.venue.operatorId).emit('new_notification', opNotification); } catch (e) { /* ignore */ }

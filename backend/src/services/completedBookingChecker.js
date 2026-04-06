@@ -68,6 +68,7 @@ const cleanupCompletedBookings = async () => {
                                 message: `Your booking at ${booking.slot.venue.name} has concluded. Please leave a review and let others know how it went!`,
                                 relatedEntityType: 'venue',
                                 relatedEntityId: booking.slot.venue.id,
+                                link: `/venues/${booking.slot.venue.id}`,
                             },
                         });
 

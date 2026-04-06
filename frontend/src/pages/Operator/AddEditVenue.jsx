@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
+import toast from 'react-hot-toast';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import MapPicker from '../../components/common/MapPicker';
 import ImageUploader from '../../components/common/ImageUploader';
 import { useAuth } from '../../context/AuthContext';
@@ -28,6 +30,7 @@ function AddEditVenue() {
     const [sports, setSports] = useState([]);
     const [stagedImages, setStagedImages] = useState([]); // For create mode: files to upload after venue creation
     const [primaryImageIndex, setPrimaryImageIndex] = useState(0);
+    const [deleteImageModal, setDeleteImageModal] = useState({ open: false, imageId: null });
 
     const [formData, setFormData] = useState({
         name: '',
@@ -131,7 +134,7 @@ function AddEditVenue() {
             }
         } catch (err) {
             console.error('Error fetching venue:', err);
-            alert('Failed to load venue details');
+            toast.error('Failed to load venue details');
             navigate('/operator/venues');
         } finally {
             setIsFetching(false);
@@ -245,7 +248,7 @@ function AddEditVenue() {
                 await api.put(`/venues/operator/my-venues/${id}/hours`, {
                     operatingHours: formData.operatingHours,
                 });
-                alert('Venue updated successfully!');
+                toast.success('Venue updated successfully!');
             } else {
                 // Create the venue first
                 const response = await api.post('/venues/operator/my-venues', payload);
@@ -268,17 +271,17 @@ function AddEditVenue() {
                         console.log('Images uploaded successfully');
                     } catch (imgErr) {
                         console.error('Image upload failed:', imgErr.response?.data || imgErr.message);
-                        alert(`Venue created but image upload failed: ${imgErr.response?.data?.message || imgErr.message}. You can try adding images again in edit mode.`);
+                        toast.error(`Venue created but image upload failed: ${imgErr.response?.data?.message || imgErr.message}. You can try adding images again in edit mode.`);
                     }
                 }
 
-                alert('Venue created successfully! It will be reviewed by admin.');
+                toast.success('Venue created successfully! It will be reviewed by admin.');
             }
 
             navigate('/operator/venues');
         } catch (err) {
             console.error('Error saving venue:', err);
-            alert(err.response?.data?.message || 'Failed to save venue');
+            toast.error(err.response?.data?.message || 'Failed to save venue');
         } finally {
             setIsLoading(false);
         }
@@ -294,6 +297,28 @@ function AddEditVenue() {
 
     return (
         <div className="max-w-4xl mx-auto">
+            <ConfirmModal
+                isOpen={deleteImageModal.open}
+                title='Delete Image?'
+                message='Are you sure you want to delete this image? This action cannot be undone.'
+                confirmText='Delete Image'
+                confirmVariant='danger'
+                onConfirm={async () => {
+                    const imageId = deleteImageModal.imageId;
+                    setDeleteImageModal({ open: false, imageId: null });
+                    try {
+                        await api.delete(`/venues/operator/my-venues/${id}/images/${imageId}`);
+                        setFormData(prev => ({
+                            ...prev,
+                            images: prev.images.filter(img => img.id !== imageId)
+                        }));
+                        toast.success('Image deleted');
+                    } catch (err) {
+                        toast.error(err.response?.data?.message || 'Failed to delete image');
+                    }
+                }}
+                onCancel={() => setDeleteImageModal({ open: false, imageId: null })}
+            />
             {/* Page Header */}
             <div className="mb-8">
                 <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
@@ -769,7 +794,7 @@ function AddEditVenue() {
                                                     formDataUpload,
                                                     { headers: { 'Content-Type': 'multipart/form-data' } }
                                                 );
-                                                alert(response.data.message);
+                                                toast.success(response.data.message);
                                                 // Refresh venue data
                                                 const venueResp = await api.get(`/venues/operator/my-venues/${id}`);
                                                 if (venueResp.data.success) {
@@ -780,21 +805,12 @@ function AddEditVenue() {
                                                 }
                                             } catch (err) {
                                                 console.error('Image upload error:', err);
-                                                alert(err.response?.data?.message || err.message || 'Failed to upload images');
+                                                toast.error(err.response?.data?.message || err.message || 'Failed to upload images');
                                                 throw err;
                                             }
                                         }}
-                                        onDeleteExisting={async (imageId) => {
-                                            if (!window.confirm('Delete this image?')) return;
-                                            try {
-                                                await api.delete(`/venues/operator/my-venues/${id}/images/${imageId}`);
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    images: prev.images.filter(img => img.id !== imageId)
-                                                }));
-                                            } catch (err) {
-                                                alert(err.response?.data?.message || 'Failed to delete image');
-                                            }
+                                        onDeleteExisting={(imageId) => {
+                                            setDeleteImageModal({ open: true, imageId });
                                         }}
                                     />
                                 </div>

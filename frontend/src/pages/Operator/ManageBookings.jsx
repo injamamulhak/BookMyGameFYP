@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { formatTime } from '../../utils/timeUtils';
+import toast from 'react-hot-toast';
 
 /**
  * ManageBookings - Operator's booking management page
@@ -92,35 +93,32 @@ function ManageBookings() {
     };
 
     const handleConfirmBooking = async (bookingId) => {
-        if (!confirm('Are you sure you want to confirm this booking?')) return;
-
         try {
             setActionLoading(bookingId);
             const response = await api.put(`/bookings/operator/${bookingId}/confirm`);
             if (response.data.success) {
                 fetchBookings();
+                toast.success('Booking confirmed');
             }
         } catch (err) {
             console.error('Error confirming booking:', err);
-            alert(err.response?.data?.message || 'Failed to confirm booking');
+            toast.error(err.response?.data?.message || 'Failed to confirm booking');
         } finally {
             setActionLoading(null);
         }
     };
 
     const handleCancelBooking = async (bookingId) => {
-        const reason = prompt('Please provide a reason for cancellation (optional):');
-        if (reason === null) return; // User clicked cancel
-
         try {
             setActionLoading(bookingId);
-            const response = await api.put(`/bookings/operator/${bookingId}/cancel`, { reason });
+            const response = await api.put(`/bookings/operator/${bookingId}/cancel`, { reason: '' });
             if (response.data.success) {
                 fetchBookings();
+                toast.success('Booking cancelled');
             }
         } catch (err) {
             console.error('Error cancelling booking:', err);
-            alert(err.response?.data?.message || 'Failed to cancel booking');
+            toast.error(err.response?.data?.message || 'Failed to cancel booking');
         } finally {
             setActionLoading(null);
         }

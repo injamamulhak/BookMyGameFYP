@@ -326,16 +326,39 @@ const registerForEvent = async (req, res) => {
 
     // Create notification for user only if payment is not required
     if (registration.paymentStatus === 'completed') {
-      await prisma.notification.create({
+      const fullEvent = await prisma.event.findUnique({
+        where: { id },
+        include: { venue: { select: { operatorId: true } } },
+      })
+
+      const userNotif = await prisma.notification.create({
         data: {
           userId,
           type: 'event_registration',
           title: 'Event Registration Confirmed',
-          message: `You have successfully registered for "${event.title}"`,
+          message: `You have successfully registered for "${event.title}". See you there!`,
           relatedEntityType: 'event',
           relatedEntityId: id,
+          link: '/my-events',
         },
       })
+      try { getIo().to(userId).emit('new_notification', userNotif) } catch (e) { /* ignore */ }
+
+      // Notify operator
+      if (fullEvent?.venue?.operatorId) {
+        const opNotif = await prisma.notification.create({
+          data: {
+            userId: fullEvent.venue.operatorId,
+            type: 'new_event_registration',
+            title: 'New Event Registration',
+            message: `A user registered for "${event.title}".`,
+            relatedEntityType: 'event',
+            relatedEntityId: id,
+            link: `/operator/events/${id}`,
+          },
+        })
+        try { getIo().to(fullEvent.venue.operatorId).emit('new_notification', opNotif) } catch (e) { /* ignore */ }
+      }
     }
 
     res.status(201).json({

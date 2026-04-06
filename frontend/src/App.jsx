@@ -18,6 +18,8 @@ import Checkout from './pages/Shop/Checkout';
 import TrainingVideos from './pages/Training/TrainingVideos';
 import ContactPage from './pages/Public/ContactPage';
 import FAQPage from './pages/Public/FAQPage';
+import PrivacyPolicyPage from './pages/Public/PrivacyPolicyPage';
+import TermsPage from './pages/Public/TermsPage';
 
 // User imports
 import UserSettings from './pages/User/UserSettings';
@@ -91,6 +93,8 @@ function App() {
                         <Route path="/training" element={<TrainingVideos />} />
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/faq" element={<FAQPage />} />
+                        <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                        <Route path="/terms" element={<TermsPage />} />
 
                         {/* User Settings Route - All authenticated users */}
                         <Route

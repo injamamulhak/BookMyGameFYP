@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { getIo } = require('../socket');
 
 /**
  * Order Controller
@@ -97,6 +98,33 @@ const createOrder = async (req, res) => {
 
             return newOrder;
         });
+
+        // Notify seller(s) for each unique seller whose products were ordered
+        const sellerIds = [...new Set(
+            order.items
+                .filter(item => item.product.sellerId)
+                .map(item => item.product.sellerId)
+        )];
+        for (const sellerId of sellerIds) {
+            try {
+                const sellerItems = order.items.filter(i => i.product.sellerId === sellerId);
+                const itemCount = sellerItems.reduce((sum, i) => sum + i.quantity, 0);
+                const notification = await prisma.notification.create({
+                    data: {
+                        userId: sellerId,
+                        type: 'new_order',
+                        title: 'New Order Received',
+                        message: `A new order for ${itemCount} item(s) totalling Rs. ${totalAmount.toFixed(0)} has been placed.`,
+                        relatedEntityType: 'order',
+                        relatedEntityId: order.id,
+                        link: `/operator/orders/${order.id}`,
+                    },
+                });
+                try { getIo().to(sellerId).emit('new_notification', notification); } catch (e) { /* ignore */ }
+            } catch (notifErr) {
+                console.error('Order notification error:', notifErr);
+            }
+        }
 
         res.status(201).json({
             success: true,
@@ -513,8 +541,31 @@ const updateOperatorOrderStatus = async (req, res) => {
         // Normal status update
         const updatedOrder = await prisma.order.update({
             where: { id },
-            data: { status }
+            data: { status },
+            include: {
+                user: { select: { id: true } },
+            }
         });
+
+        // Notify user when order is completed
+        if (status === 'completed') {
+            try {
+                const notification = await prisma.notification.create({
+                    data: {
+                        userId: updatedOrder.user.id,
+                        type: 'order_completed',
+                        title: 'Order Completed',
+                        message: `Your order #${id.slice(-8).toUpperCase()} has been marked as completed. Thank you!`,
+                        relatedEntityType: 'order',
+                        relatedEntityId: id,
+                        link: `/my-orders/${id}`,
+                    },
+                });
+                try { getIo().to(updatedOrder.user.id).emit('new_notification', notification); } catch (e) { /* ignore */ }
+            } catch (notifErr) {
+                console.error('Order completed notification error:', notifErr);
+            }
+        }
 
         res.json({
             success: true,

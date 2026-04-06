@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { FaStar, FaFlag, FaTrash, FaCheck, FaExternalLinkAlt } from 'react-icons/fa';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 const StarDisplay = ({ rating }) => (
     <div className="flex items-center gap-0.5">
@@ -17,6 +18,7 @@ const StarDisplay = ({ rating }) => (
 function FlaggedReviews() {
     const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [confirmModal, setConfirmModal] = useState({ open: false, reviewId: null });
 
     // Fetch all flagged reviews across all venues (admin can see everything)
     const fetchFlagged = useCallback(async () => {
@@ -47,8 +49,13 @@ function FlaggedReviews() {
         fetchFlagged();
     }, [fetchFlagged]);
 
-    const handleDeleteReview = async (reviewId) => {
-        if (!window.confirm('Permanently delete this review? This also removes all replies.')) return;
+    const handleDeleteReview = (reviewId) => {
+        setConfirmModal({ open: true, reviewId });
+    };
+
+    const confirmDeleteReview = async () => {
+        const { reviewId } = confirmModal;
+        setConfirmModal({ open: false, reviewId: null });
         try {
             await api.delete(`/reviews/${reviewId}`);
             toast.success('Review deleted successfully');
@@ -80,6 +87,15 @@ function FlaggedReviews() {
 
     return (
         <div className="space-y-6">
+            <ConfirmModal
+                isOpen={confirmModal.open}
+                title='Permanently Delete Review?'
+                message='This will permanently delete this review and all its replies. This action cannot be undone.'
+                confirmText='Delete Review'
+                confirmVariant='danger'
+                onConfirm={confirmDeleteReview}
+                onCancel={() => setConfirmModal({ open: false, reviewId: null })}
+            />
             {/* Header */}
             <div>
                 <h1 className="text-2xl font-bold text-gray-900">Flagged Reviews</h1>

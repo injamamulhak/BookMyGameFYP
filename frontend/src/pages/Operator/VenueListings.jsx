@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import toast from 'react-hot-toast';
 
 function VenueListings() {
     const [venues, setVenues] = useState([]);
@@ -71,12 +72,12 @@ function VenueListings() {
                 : `/venues/operator/my-venues/${deleteModal.venue.id}`;
 
             const response = await api.delete(endpoint);
-            alert(response.data.message);
+            toast.success(response.data.message || 'Venue updated successfully');
             closeDeleteModal();
             fetchVenues();
         } catch (err) {
             console.error('Error:', err);
-            alert(err.response?.data?.message || 'Failed to delete venue');
+            toast.error(err.response?.data?.message || 'Failed to delete venue');
         } finally {
             setIsDeleting(false);
         }
