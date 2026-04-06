@@ -95,6 +95,11 @@ function AddEditProduct() {
       return
     }
 
+    if (form.originalPrice && Number(form.price) >= Number(form.originalPrice)) {
+      setError('Selling price must be less than the original price to show a discount')
+      return
+    }
+
     setLoading(true)
     try {
       const formData = new FormData()
