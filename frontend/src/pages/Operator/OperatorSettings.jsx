@@ -272,7 +272,7 @@ function OperatorSettings() {
                                     )}
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-gray-700">{user?.email}</p>
+                                    <p className="text-sm font-medium text-gray-700 break-all">{user?.email}</p>
                                     <p className="text-xs text-gray-500 capitalize mb-3">{user?.role} Account</p>
                                     <input
                                         ref={fileInputRef}
@@ -495,7 +495,7 @@ function OperatorSettings() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-1">
                         <p className="text-sm text-gray-500">Email Address</p>
-                        <p className="font-medium text-gray-900">{user?.email}</p>
+                        <p className="font-medium text-gray-900 break-all">{user?.email}</p>
                     </div>
                     <div className="space-y-1">
                         <p className="text-sm text-gray-500">Account Type</p>

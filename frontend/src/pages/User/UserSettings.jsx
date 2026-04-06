@@ -294,7 +294,7 @@ function UserSettings() {
                                 />
                             </div>
                             <h3 className="font-semibold text-lg text-gray-900">{user?.fullName}</h3>
-                            <p className="text-gray-500 text-sm">{user?.email}</p>
+                            <p className="text-gray-500 text-sm break-all">{user?.email}</p>
                             <span className="inline-block mt-2 px-3 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full capitalize">
                                 {user?.role || 'User'}
                             </span>
